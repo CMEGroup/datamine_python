@@ -1,6 +1,6 @@
-#CME Datamine
+# CME Datamine
 
-#Overview
+# Overview
 
 CME Datamine is offered via a self-service cloud solution, where you can access more than 
 450 terabytes of historical data almost instantaneously, using some of the most flexible 
@@ -19,7 +19,7 @@ your analysis needs.
 
 
 
-#How to Use This Package
+# How to Use This Package
 
 The following will clone this repo, including an environment.yml file that will create the 
 proper Anaconda environment with all the dependencies and launch the juptyer lab environment.
@@ -33,7 +33,7 @@ source activate  datamine
 juptyer notebook
 ```
 
-#Example Usages
+# Example Usages
 
 
 The following quickly outline some of the simple 
