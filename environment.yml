@@ -1,0 +1,15 @@
+name: datamine
+channels:
+- conda-forge
+- defaults
+dependencies:
+- pandas
+- python-snappy
+- pytest
+- pytest-cov
+- pytest-spec
+- python=3
+- requests
+- thrift
+- tqdm
+
