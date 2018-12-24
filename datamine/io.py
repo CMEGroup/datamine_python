@@ -230,7 +230,6 @@ class DatamineCon(object):
                     if 'TELLUSLABS' or 'ORBITALINSIGHT' in file:
                         next(tempData, None)
                     for line in tempData:
-
                         data.append(line)
 
         return data
@@ -290,7 +289,7 @@ class DatamineCon(object):
 
         # Get Paging Items if Greater than 1000 Items
         while self._datacatalogresp['paging']['next'] is not '' and len(self.data_catalog) < limit:
-            #print('paging Catalog: %s' % (self._datacatalogresp['paging']['next']))
+            # print('paging Catalog: %s' % (self._datacatalogresp['paging']['next']))
             print('paging Catalog: %s' % (self._datacatalogresp['paging']['next'].split('&')[-1]))
             self._datacatalogresp = self._do_call_json(self._datacatalogresp['paging']['next'])
             # print (self._datacatalogresp['files'])
@@ -305,7 +304,7 @@ class DatamineCon(object):
                 # print (self.datacatalogresp)
 
                 return None
-            #todo remove this break when the catalog paging is working again!
+            # todo remove this break when the catalog paging is working again!
             break
         return None
 
@@ -572,7 +571,8 @@ class DatamineCon(object):
         # # Catagoricals
         self.time_sales_DF["session_indicator"] = self.time_sales_DF["session_indicator"].astype('category')
         self.time_sales_DF["ticker_symbol"] = self.time_sales_DF["ticker_symbol"].astype('category')
-        self.time_sales_DF["future_option_index_indicator"] = self.time_sales_DF["future_option_index_indicator"].astype('category')
+        self.time_sales_DF["future_option_index_indicator"] = self.time_sales_DF[
+            "future_option_index_indicator"].astype('category')
         self.time_sales_DF["close_open_type"] = self.time_sales_DF["close_open_type"].astype('category')
         self.time_sales_DF["exchange_code"] = self.time_sales_DF["exchange_code"].astype('category')
         self.time_sales_DF["ask_bid_type"] = self.time_sales_DF["ask_bid_type"].astype('category')
@@ -714,15 +714,22 @@ class DatamineCon(object):
         self.orbital_insights_DF["location"] = self.orbital_insights_DF["location"].astype('category')
 
         # # Integers
-        self.orbital_insights_DF["sampled_tanks"] = self.orbital_insights_DF["sampled_tanks"].astype('int64', errors='ignore')
-        self.orbital_insights_DF["total_available_tanks"] = self.orbital_insights_DF["total_available_tanks"].astype('int64', errors='ignore')
+        self.orbital_insights_DF["sampled_tanks"] = self.orbital_insights_DF["sampled_tanks"].astype('int64',
+                                                                                                     errors='ignore')
+        self.orbital_insights_DF["total_available_tanks"] = self.orbital_insights_DF["total_available_tanks"].astype(
+            'int64', errors='ignore')
 
         # # floats
-        self.orbital_insights_DF["smoothed_estimate"] = self.orbital_insights_DF["smoothed_estimate"].astype('float', errors='ignore')
-        self.orbital_insights_DF["storage_capacity_estimate"] = self.orbital_insights_DF["storage_capacity_estimate"].astype('float', errors='ignore')
-        self.orbital_insights_DF["truth_value_mb"] = self.orbital_insights_DF["truth_value_mb"].astype('float', errors='ignore')
-        self.orbital_insights_DF["volume_estimate"] = self.orbital_insights_DF["volume_estimate"].astype('float', errors='ignore')
-        self.orbital_insights_DF["volume_estimate_stderr"] = self.orbital_insights_DF["volume_estimate_stderr"].astype('float', errors='ignore')
+        self.orbital_insights_DF["smoothed_estimate"] = self.orbital_insights_DF["smoothed_estimate"].astype('float',
+                                                                                                             errors='ignore')
+        self.orbital_insights_DF["storage_capacity_estimate"] = self.orbital_insights_DF[
+            "storage_capacity_estimate"].astype('float', errors='ignore')
+        self.orbital_insights_DF["truth_value_mb"] = self.orbital_insights_DF["truth_value_mb"].astype('float',
+                                                                                                       errors='ignore')
+        self.orbital_insights_DF["volume_estimate"] = self.orbital_insights_DF["volume_estimate"].astype('float',
+                                                                                                         errors='ignore')
+        self.orbital_insights_DF["volume_estimate_stderr"] = self.orbital_insights_DF["volume_estimate_stderr"].astype(
+            'float', errors='ignore')
 
         # # Dates
         self.orbital_insights_DF['date'] = pd.to_datetime(self.orbital_insights_DF['date'], format='%Y-%m-%d')
@@ -730,6 +737,96 @@ class DatamineCon(object):
         # Set Index
         self.orbital_insights_DF.set_index('date', inplace=True)
 
-        return 0
+        return None
 
+    def eris_load(self, download=True):
+        """This function loads Eris Data Sets.
 
+        This includes downloading any data avaliable in your catalog into the
+        /ERIS directory of the path variable set upon creating of the
+        connection.  It then loads and structures your local data into
+        into a pandas DataFrame.
+        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/Eris+PAI+Dataset
+        Parameters
+        ----------
+        :param download: Attempt to download any
+        data avaliable before loading data from local disk.
+        :type download: bool.
+
+        Creates
+        -------
+        :creates: pandas.DataFrame object.eris_DF
+
+        Returns
+        -------
+        :returns:  None
+        """
+
+        if download:
+
+            if self._download_data('ERIS') == 0:
+                pass
+            else:
+                return 1
+
+            if self.debug:
+                print('Download ERIS Data Complete')
+
+        names = ['Symbol', 'FinalSettlementPrice', 'EvaluationDate', 'FirstTradeDate',
+                 'ErisPAIDate', 'EffectiveDate', 'CashFlowAlignmentDate', 'MaturityDate', 'NPV (A)',
+                 'FixedNPV', 'FloatingNPV', 'Coupon (%)', 'FairCoupon (%)', 'FixedPayment', 'FloatingPayment',
+                 'NextFixedPaymentDate', 'NextFixedPaymentAmount', 'PreviousFixingDate', 'PreviousFixingRate',
+                 'NextFloatingPaymentDate', 'NextFloatingPaymentAmount', 'NextFixingDate', 'PreviousSettlementDate',
+                 'PreviousSettlementPrice', 'PreviousErisPAI', 'FedFundsDate', 'FedFundsRate (%)', 'AccrualDays',
+                 'DailyIncrementalErisPAI', 'AccruedCoupons (B)', 'ErisPAI (C)', 'SettlementPrice (100+A+B-C)',
+                 'RFQ NPV TickSize ($)', 'Nominal', 'ResetRateDescriptor', 'InterpolationFactor', 'HighTradePrice',
+                 'LowTradePrice', 'LastTradePrice', 'DailyContractVolume', 'Tag55(T)', 'Tag65(T)', 'Tag55(T+1)',
+                 'Tag65(T+1)', 'LastTradeDate', 'InitialSpeculatorMargin', 'SecondarySpeculatorMargin',
+                 'InitialHedgerMargin', 'SecondaryHedgerMargin', 'ExchangeSymbol (EX005)', 'BloombergTicker',
+                 'FirstFixingDate', 'Category', 'BenchmarkContractName', 'PV01', 'DV01', 'ShortName',
+                 'EffectiveYearMonth']
+
+        # Handle Top Day Files First
+        files = []
+        for file in os.listdir(self.path + 'ERIS/'):
+            if 'ERIS' in file:
+                files.append(self.path + 'ERIS/' + file)
+
+        results = []
+        for file in tqdm.tqdm(files):
+            results = self._load_files_from_disk(file)
+
+        self.eris_DF = pd.DataFrame(results, columns=names)
+
+        # Set Types
+        # # Catagoricals
+        self.eris_DF["Symbol"] = self.eris_DF["Symbol"].astype('category')
+
+        self.eris_DF["ResetRateDescriptor"] = self.eris_DF["ResetRateDescriptor"].astype('category')
+        self.eris_DF["ExchangeSymbol (EX005)"] = self.eris_DF["ExchangeSymbol (EX005)"].astype('category')
+        self.eris_DF["BloombergTicker"] = self.eris_DF["BloombergTicker"].astype('category')
+
+        # # Integers
+        self.eris_DF["AccrualDays"] = self.eris_DF["AccrualDays"].astype('int64', errors='ignore')
+        self.eris_DF["EffectiveYearMonth"] = self.eris_DF["EffectiveYearMonth"].astype('int64', errors='ignore')
+        self.eris_DF["Nominal"] = self.eris_DF["Nominal"].astype('int64', errors='ignore')
+
+        # # floats
+        floatItems = ['FinalSettlementPrice', 'NPV (A)', 'FixedNPV', 'FloatingNPV', 'Coupon (%)',
+                      'FairCoupon (%)', 'FixedPayment', 'FloatingPayment', 'NextFixedPaymentAmount',
+                      'PreviousFixingRate', 'NextFloatingPaymentAmount', 'PreviousSettlementPrice',
+                      'PreviousErisPAI', 'FedFundsRate (%)', 'DailyIncrementalErisPAI', 'AccruedCoupons (B)',
+                      'ErisPAI (C)',  'SettlementPrice (100+A+B-C)', 'InterpolationFactor',
+                      'HighTradePrice','PV01','DV01'
+                      ]
+        for floatItem in floatItems:
+            self.eris_DF[floatItems] = self.eris_DF[floatItems].astype('float', errors='ignore')
+
+        # # Dates
+        dateItems = ['EvaluationDate', 'FirstTradeDate', 'ErisPAIDate',
+                     'EffectiveDate', 'CashFlowAlignmentDate', 'MaturityDate', 'NextFixedPaymentDate',
+                     'PreviousFixingDate', 'NextFloatingPaymentDate', 'NextFixingDate', 'PreviousSettlementDate',
+                     'FedFundsDate','LastTradeDate','FirstFixingDate']
+        for dateItem in dateItems:
+            print(dateItem)
+            self.eris_DF[dateItem] = pd.to_datetime(self.eris_DF[dateItem], format='%m/%d/%Y', errors='ignore')
