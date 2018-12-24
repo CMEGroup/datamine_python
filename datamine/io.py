@@ -42,7 +42,7 @@ class DatamineCon(object):
 
         datamine = datamine_io.Datamine(user='CHANGE_ME', passwd='CHANGE_ME')
         datamine.getCatalog()
-        datamine.loadCrypto()
+        datamine.loadCrypto()  #for crypto data sets
 
         datamine.debug = True # turn on debug logging
     """
@@ -57,10 +57,16 @@ class DatamineCon(object):
         :param path: The URL path where you would files save on your local environment
 
         :type user: string
-        :param user: CME Group Login User Name
+        :param user: CME Group Login User Name.  See https://www.cmegroup.com/market-data/datamine-api.html
 
         :type password: string
         :param password: CME Group APP Password for Datamine Services
+
+        :type url: string
+        :param url: The primary URL for CME Datamine API.
+
+        :type url: int
+        :param url: The number of threads for downloading files.
         """
         self.url = url
         self.user = username
@@ -70,6 +76,11 @@ class DatamineCon(object):
         self.processes = 4
 
     def _do_call_json(self, url, retry=False):
+        """Download catalog helper function from url.
+
+        Returns json response with personal data catalog.
+
+        """
         if self.debug:
             print('do call with url: %s' % (url))
 
@@ -93,14 +104,10 @@ class DatamineCon(object):
         finally:
             resp.connection.close()
 
-        # Test for Server Error
-        if result == 'Internal Server Error':
-            print('SERVER ERROR CATCH!')
-
         return result
 
     def _do_call_data(self, package):
-        """Download file from url to specific path
+        """Download datamine hosted file from url to self.path location
 
         URL is expected to have a Content-Disposition header telling us what
         filename to use.
@@ -142,7 +149,18 @@ class DatamineCon(object):
 
         return None
 
-    def _download_data(self, dataset, fids=[], processes=4):
+    def _download_data(self, dataset, fids=[]):
+        """Download entire or specific by fids datamine datasets to local directory set by self.path
+
+        :type dataset: string
+        :param dataset: The specific CME Datamine dataset name as retreived from catalog.
+
+        :type fids: list of stings
+        :param fids: The file ID numbers from self.data_catalog if you want just specific item. Else will pull all avalable.
+
+        Returns None.
+
+        """
         if self.debug:
             print('total Items For Retreval from CME Datamine: %s' % (len(fids)))
 
@@ -163,7 +181,7 @@ class DatamineCon(object):
                 return 1
 
         # multithreading
-        pool = multiprocessing.Pool(processes=processes)
+        pool = multiprocessing.Pool(processes=self.processes)
 
         package = []
         for fid in fids:
@@ -178,6 +196,20 @@ class DatamineCon(object):
         return 0
 
     def _load_files_from_disk(self, file, fileType='CSV', skipHeader=False):
+        """Helper function to load files from local disk from self.path
+        :type file: string
+        :param file: The specific file name
+
+        :type fileType: structureing
+        :param fileType: Only support 'CSV' currently
+
+        :type skipHeader: bool
+        :type skipHeader: skip the header of the file for processing.
+
+        Returns None.
+
+        """
+
         if fileType == 'CSV':
             data = []
             # print (Path(file).suffix)
@@ -211,17 +243,26 @@ class DatamineCon(object):
 
         Parameters
         ----------
-        Limit - how many catalog records do you want to limit; this is to control for
-        large collections as they take time to retrieve.
-        dataset - what data set you want else no filters are applied.
+        :type dataset: string
+        :param dataset: The specific dataset items that you would like to retrieve
 
-        Returns
+        :type limit: int64
+        :param limit: Limits the amount of catalog items you would like to retrieve.
+
+        :type start: int64
+        :param start: The page number to start pulling items from.
+
+        :type refresh: bool
+        :param refresh: Set to True if you want to refresh the local copy.
+
+        Creates
         -------
-        dict -- dictionary of the data catalog from Datamine
-        """
+        :creates: python.dictionary self.data_catalog -- containing custom data catalog avaliable.
 
-        # self._datacatalogresp  : Contains the url request that needs to be made.
-        # self.
+        eturns
+        -------
+        Returns None -- dictionary of the data catalog from Datamine
+        """
 
         if refresh:
             try:
@@ -244,13 +285,12 @@ class DatamineCon(object):
             # no specific dataset set by the user .
             else:
                 self._datacatalogresp = self._do_call_json(self.url)
-
             for item in self._datacatalogresp['files']:
                 self.data_catalog[item['fid']] = item
 
         # Get Paging Items if Greater than 1000 Items
         while self._datacatalogresp['paging']['next'] is not '' and len(self.data_catalog) < limit:
-            # print('paging Catalog: %s' % (self._datacatalogresp['paging']['next']))
+            #print('paging Catalog: %s' % (self._datacatalogresp['paging']['next']))
             print('paging Catalog: %s' % (self._datacatalogresp['paging']['next'].split('&')[-1]))
             self._datacatalogresp = self._do_call_json(self._datacatalogresp['paging']['next'])
             # print (self._datacatalogresp['files'])
@@ -258,14 +298,16 @@ class DatamineCon(object):
                 for item in self._datacatalogresp['files']:
                     self.data_catalog[item['fid']] = item
             # debuging failed responses
+
             except Exception as e:
                 print(e)
 
                 # print (self.datacatalogresp)
 
-                return 1
-
-        return 0
+                return None
+            #todo remove this break when the catalog paging is working again!
+            break
+        return None
 
     def crypto_load(self, download=True):
         """This function loads CME Crypto Data -- Bitcoin and Etherium.  This includes
@@ -273,10 +315,11 @@ class DatamineCon(object):
         /cryptocurrency directory of the path variable set upon creating of the
         connection.  It then loads and structures your local data into
         into a pandas DataFrame.
+        Data sets avaliable: Bitcoin, Etherium
+        See: https://wiki.chicago.cme.com/confluence/display/EPICSANDBOX/24-7+CME+CF+Cryptocurrency+Indices
         Parameters
         ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
+        :param download: Attempt to download any data avaliable before loading data from local disk.
         :type download: bool.
 
         Creates
@@ -285,7 +328,7 @@ class DatamineCon(object):
 
         Returns
         -------
-        :returns:  int -- the return code.
+        :returns:  None
         """
 
         if download:
@@ -352,30 +395,32 @@ class DatamineCon(object):
         del self.crypto_DF['mdEntryDate']
         del self.crypto_DF['mdEntryTime']
 
-        return 0
+        return None
 
     def MBO_download(self, download=True):
         """This function downloads CME MBO Data.  This
         downloads any data avaliable in your catalog into the
         /MBO directory of the path variable set upon creating of the
-        connection.  No attempt is made to load this data into python given
+        connection.
+        No attempt is made to load this data into python given
         the size and unique use case.
+        See: https://wiki.chicago.cme.com/confluence/display/EPICSANDBOX/MBO+FIX?focusedCommentId=525291252#comment-525291252
+        for specifications and other information about this data set.
 
         Parameters
         ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
+        :param download: Attempt to download MBO data set.
         :type download: bool.
 
         Returns
         -------
-        :returns:  int -- the return code.
+        :returns:  None
 
         """
         if download:
             self._download_data('MBO')
 
-        return 0
+        return None
 
     def tellus_labs_load(self, download=True):
         """This function loads Tellus Labs Data.
@@ -385,10 +430,10 @@ class DatamineCon(object):
         /TELLUSLABS directory of the path variable set upon creating of the
         connection.  It then loads and structures your local data into
         into a pandas DataFrame.
+        See: https://www.cmegroup.com/education/articles-and-reports/telluslabs-faq.html
         Parameters
         ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
+        :param download: Attempt to download any data avaliable before loading data from local disk.
         :type download: bool.
 
         Creates
@@ -397,7 +442,7 @@ class DatamineCon(object):
 
         Returns
         -------
-        :returns:  int -- the return code.
+        :returns:  None
         """
 
         if download:
@@ -469,7 +514,7 @@ class DatamineCon(object):
         # # Set Index
         self.tellus_labs_DF.set_index('metric_date', inplace=True)
 
-        return 0
+        return None
 
     def time_sales_load(self, download=True):
         """This function loads time and sales data, often refered to as
@@ -480,8 +525,7 @@ class DatamineCon(object):
         into a pandas DataFrame.
         Parameters
         ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
+        :param download: Attempt to download any data avaliable before loading data from local disk.
         :type download: bool.
 
         Creates
@@ -490,7 +534,7 @@ class DatamineCon(object):
 
         Returns
         -------
-        :returns:  int -- the return code.
+        :returns:  None
 
         """
 
@@ -575,7 +619,7 @@ class DatamineCon(object):
         # self.time_sales_DF['trade_time'] = pd.to_datetime(
         #        self.time_sales_DF['trade_time'], format='%H:%M:%S')
 
-        return 0
+        return None
 
     def orbital_insights_load(self, download=True):
         """This function loads Orbital Insights Data.
@@ -585,6 +629,7 @@ class DatamineCon(object):
         /ORBITALINSIGHT directory of the path variable set upon creating of the
         connection.  It then loads and structures your local data into
         into a pandas DataFrame.
+        SEE: https://www.cmegroup.com/market-data/orbital-insight/faq.html
         Parameters
         ----------
         :param download: Attempt to download any
@@ -597,7 +642,7 @@ class DatamineCon(object):
 
         Returns
         -------
-        :returns:  int -- the return code.
+        :returns:  None
         """
 
         if download:
@@ -686,3 +731,5 @@ class DatamineCon(object):
         self.orbital_insights_DF.set_index('date', inplace=True)
 
         return 0
+
+
