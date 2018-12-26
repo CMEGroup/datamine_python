@@ -115,25 +115,42 @@ class DatamineCon(object):
         Returns None.
 
         """
-        if self.debug:
-            print('do call with url: %s' % (self.url))
+
 
         url = package.get('url')
         path = package.get('path')
+        request_param = package.get('params')
+
+        if self.debug:
+            print('do GET with url: %s, params: %s' % (url, request_param))
 
         if path is None:
             path = self.path
-        response = requests.get(url, timeout=60,
+        response = requests.get(url, params=request_param, timeout=60,
                                 auth=HTTPBasicAuth(self.user, self.password), stream=True)
+
+        if self.debug:
+            print('Get Response Return: response code: %s, request params: %s, requested URL: %s,' % (response.status_code, request_param, response.url ))
+
         if response.status_code != 200:
             raise RequestError('Request Failed: %s. Text: %s' % (response.status_code, response.text))
-            return
-        params = cgi.parse_header(
-            response.headers.get('Content-Disposition', ''))[-1]
+
+        #load the returned parameters
+
+        try:
+            params = cgi.parse_header(
+                response.headers.get('Content-Disposition', ''))[-1]
+        except:
+            print (
+                'No parameter response. Response Code: %s | Response Text: %s | Request URL: %s | Reponse Header/Parameters: %s' %
+                (response.status_code, response.text, response.url, response.headers.get('Content-Disposition', '')))
+
+
         if 'filename' not in params:
-            raise ValueError('Could not find a filename')
-        if self.debug:
-            print('resp code: %s' % (response.status_code))
+            print ('Could not find a FILENAME in parameter response. Response Code: %s | Response Text: %s | Request URL: %s | Reponse Header/Parameters: %s' %
+                               (response.status_code, response.text, response.url, response.headers.get('Content-Disposition', '')))
+
+
 
         try:
             filename = os.path.basename(params['filename'])
@@ -142,8 +159,8 @@ class DatamineCon(object):
                 response.raw.decode_content = True
                 shutil.copyfileobj(response.raw, target)
         except Exception as e:
-            raise RequestError(
-                'Failed to Downlaod file response %s. Resp Code: %s' % (e, response.status_code))
+            print (
+                'Failed to Download file response %s. Resp Code: %s' % (e, response.status_code))
         finally:
             response.connection.close()
 
@@ -185,13 +202,22 @@ class DatamineCon(object):
 
         package = []
         for fid in fids:
-            package += [{'url': self.data_catalog[fid]['url'],
+            package += [{'url': self.data_catalog[fid]['url'].split('?')[0],
+                         'params': {'fid': fid},
                          'path': self.path + dataset}]
+
+
+
+        if self.debug:
+            print (package)
+
 
         pool.map(self._do_call_data, package)
 
+
         pool.close()
         pool.join()
+
         del pool
         return 0
 
@@ -786,7 +812,7 @@ class DatamineCon(object):
                  'FirstFixingDate', 'Category', 'BenchmarkContractName', 'PV01', 'DV01', 'ShortName',
                  'EffectiveYearMonth']
 
-        # Handle Top Day Files First
+        # Load Local Files
         files = []
         for file in os.listdir(self.path + 'ERIS/'):
             if 'ERIS' in file:
@@ -828,5 +854,252 @@ class DatamineCon(object):
                      'PreviousFixingDate', 'NextFloatingPaymentDate', 'NextFixingDate', 'PreviousSettlementDate',
                      'FedFundsDate','LastTradeDate','FirstFixingDate']
         for dateItem in dateItems:
-            print(dateItem)
             self.eris_DF[dateItem] = pd.to_datetime(self.eris_DF[dateItem], format='%m/%d/%Y', errors='ignore')
+
+
+
+    def bantix_downloads(self, download=True):
+        """This function downloads bantix Data Sets.
+
+        This includes downloading any data avaliable in your catalog into the
+        /BANTIX directory of the path variable set upon creating of the
+        connection.  Given the various formats; not attempt to load into Pandas is made.
+        SEE: https://www.cmegroup.com/market-data/quikstrike-via-bantix-technologies.html
+        Parameters
+        ----------
+        :param download: Attempt to download any
+        data avaliable before loading data from local disk.
+        :type download: bool.
+
+        Creates
+        -------
+        :creates: pandas.DataFrame object.bantix_DF
+
+        Returns
+        -------
+        :returns:  None
+        """
+
+        if download:
+
+            if self._download_data('BANTIX') == 0:
+                pass
+            else:
+                return 1
+
+            if self.debug:
+                print('Download BANTIX Data Complete')
+
+        return None
+
+    def rsmetrics_load(self, download=True):
+        """This function loads RS Metrics metals Data Sets.
+
+            This includes downloading any data avaliable in your catalog into the
+            /RSMETRICS directory of the path variable set upon creating of the
+            connection.  It then loads and structures your local data into
+            into a pandas DataFrame.
+            SEE: https://www.cmegroup.com/market-data/rs-metrics/faq-rs-metrics.html
+            Parameters
+            ----------
+            :param download: Attempt to download any
+            data avaliable before loading data from local disk.
+            :type download: bool.
+
+            Creates
+            -------
+            :creates: pandas.DataFrame object.rsmetrics_DF
+
+            Returns
+            -------
+            :returns:  None
+            """
+
+        if download:
+
+            if self._download_data('RSMETRICS') == 0:
+                pass
+            else:
+                return 1
+
+            if self.debug:
+                print('Download RSMETRICS Data Complete')
+
+        names = ['Order', 'Ticker', 'Type', 'Full.Name', 'Name', 'Location.Type', 'Smelter.Storage',
+                 'Metal.Shape', 'Metal.Type', 'YearMonthDayUTC', 'Address', 'City', 'State', 'Zip',
+                 'Country', 'Employee.Cars', 'Containers', 'Trucks', 'Tippers', 'Total.Area.Metal.stocks.m2',
+                 'Area.Piles.m2', 'Area.Concentrate.Bags.m2', 'Area.Cathodes.m2', 'Area.Anodes.m2',
+                 'Comments', 'Notes', 'Time_Date', 'Time', 'Month', 'Day', 'Year', 'PrePost', 'DOW',
+                 'Week.End', 'Region', 'Subregion', 'Latitude', 'Longitude', 'DIRECTORY', 'GMP',
+                 'Location', 'Metal', 'YearMonth', 'Tot.Area' ,'Drop']
+
+        # Handle Weekly Subsriptions First
+        files = []
+        for file in os.listdir(self.path + 'RSMETRICS/'):
+            if 'RSMETRICS' and 'WEEKLY' in file:
+                files.append(self.path + 'RSMETRICS/' + file)
+
+        results = []
+        for file in tqdm.tqdm(files):
+            results = self._load_files_from_disk(file)
+
+        self.rsmetrics_DF = pd.DataFrame(results, columns=names)
+        del self.rsmetrics_DF['Drop']
+        self.rsmetrics_DF['File.Timing'] = 'Weekly'
+
+
+        # Handle Daily Subsriptions
+        files = []
+        for file in os.listdir(self.path + 'RSMETRICS/'):
+            if 'RSMETRICS' and 'DAILY' in file:
+                files.append(self.path + 'RSMETRICS/' + file)
+
+        results = []
+        for file in tqdm.tqdm(files):
+            results = self._load_files_from_disk(file)
+        rsmetrics_df_daily = pd.DataFrame(results, columns=names)
+        del rsmetrics_df_daily['Drop']
+        rsmetrics_df_daily['File.Timing'] = 'Daily'
+
+
+        #join daily and weekly
+        self.rsmetrics_DF = pd.concat([rsmetrics_df_daily, self.rsmetrics_DF])
+
+        del rsmetrics_df_daily
+
+        # Set Types
+        # # Catagoricals
+        catagoricalItems = ['Ticker','Type','Full.Name','Name','Location.Type',
+                            'Smelter.Storage','Metal.Shape','Metal.Type','Country','PrePost','PrePost',
+                            'Location','Metal']
+        for catagoricalItem in catagoricalItems:
+            self.rsmetrics_DF[catagoricalItem] = self.rsmetrics_DF[catagoricalItem].astype('category')
+
+
+        # # Integers
+        integerItems = ['Employee.Cars','Containers','Trucks','Tippers','Total.Area.Metal.stocks.m2',
+                        'Area.Piles.m2','Area.Concentrate.Bags.m2','Area.Cathodes.m2',
+                        'Area.Anodes.m2','Tot.Area']
+        for integerItem in integerItems:
+
+            self.rsmetrics_DF[integerItem] = self.rsmetrics_DF[integerItem].astype('int64', errors='ignore')
+
+        # # Dates
+        self.rsmetrics_DF['Notes'] = pd.to_datetime(self.rsmetrics_DF['Notes'], format='%Y-%m-%d')
+
+        self.rsmetrics_DF['Time_Date'] = pd.to_datetime(self.rsmetrics_DF['Time_Date'], format='%H:%M %m-%d-%Y')
+
+        return None
+
+    def brokertech_tob_download(self, download=True):
+        """This function downloads Nex BrokerTech Data Sets.
+
+        This includes downloading any data avaliable in your catalog into the
+        /NEXBROKERTECTOB, directory of the path variable
+        set upon creating of the connection.
+        Given the various formats; not attempt to load into Pandas is made.
+        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
+        Parameters
+        ----------
+        :param download: Attempt to download any
+        data avaliable before loading data from local disk.
+        :type download: bool.
+
+        Creates
+        -------
+        :creates: None
+
+        Returns
+        -------
+        :returns:  None
+        """
+
+        if download:
+
+            if self._download_data('NEXBROKERTECTOB') == 0:
+                pass
+            else:
+                return 1
+
+            if self.debug:
+                print('Download NEXBROKERTECTOB Data Complete')
+
+        return None
+
+
+    def brokertech_dob_download(self, download=True):
+        """This function downloads Nex BrokerTech Data Sets.
+
+        This includes downloading any data avaliable in your catalog into the
+        '/NEXBROKERTECDOB' directory of the path variable
+        set upon creating of the connection.
+        Given the various formats; not attempt to load into Pandas is made.
+        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
+        Parameters
+        ----------
+        :param download: Attempt to download any
+        data avaliable before loading data from local disk.
+        :type download: bool.
+
+        Creates
+        -------
+        :creates: None
+
+        Returns
+        -------
+        :returns:  None
+        """
+
+        if download:
+
+            if self._download_data('NEXBROKERTECDOB') == 0:
+                pass
+            else:
+                return 1
+
+            if self.debug:
+                print('Download NEXBROKERTECDOB Data Complete')
+
+        return None
+
+    def brokertech_fob_download(self, download=True):
+        """This function downloads Nex BrokerTech Data Sets.
+
+        This includes downloading any data avaliable in your catalog into the
+        'NEXBROKERTECFOB' directory of the path variable
+        set upon creating of the connection.
+        Given the various formats; not attempt to load into Pandas is made.
+        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
+        Parameters
+        ----------
+        :param download: Attempt to download any
+        data avaliable before loading data from local disk.
+        :type download: bool.
+
+        Creates
+        -------
+        :creates: None
+
+        Returns
+        -------
+        :returns:  None
+        """
+
+        if download:
+
+            if self._download_data('NEXBROKERTECFOB') == 0:
+                pass
+            else:
+                return 1
+
+            if self.debug:
+                print('Download NEXBROKERTECFOB Data Complete')
+
+        return None
+
+
+
+
+
+
+
