@@ -1,0 +1,34 @@
+{% set data = load_setup_py_data() %}
+
+package:
+  name: datamine
+  version: {{ data.get('version') }}
+
+source:
+  path: ../
+
+build:
+  number: 0
+  noarch: python
+  script:
+    - pip install . --no-deps --ignore-installed --no-cache-dir
+
+requirements:
+  host:
+    - pip
+  run:
+    - python
+    - requests
+
+test:
+  requires:
+    - python {{ python }}
+  imports:
+    - datamine
+    - datamine.io
+
+about:
+  home: https://github.com/CMEGroup/datamine_python
+  license: BSD 3-Clause
+  license_file: LICENSE
+  summary: 'Python connector for the CME Datamine service.'

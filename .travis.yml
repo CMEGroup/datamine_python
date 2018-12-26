@@ -1,0 +1,43 @@
+# Don't use language: python; this gives us an unnecessary virtualenv
+language: c
+# Seems to be needed to prevent hanging in Python 2.7
+# https://github.com/travis-ci/travis-ci/issues/6861
+sudo: required
+
+env:
+  global:
+    - secure: "TO_BE_FILLED_IN"
+
+os:
+  - linux
+
+install:
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then MINICONDA_OS=Linux; else MINICONDA_OS=MacOSX; fi
+  - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-$MINICONDA_OS-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p "$HOME"/miniconda
+  - source "$HOME"/miniconda/etc/profile.d/conda.sh
+  - conda config --set always_yes yes --set changeps1 no --set auto_update_conda false
+  - conda install conda conda-build conda-verify
+  - conda info -a
+  - printenv | sort
+
+script:
+  - conda build conda.recipe --python=3.7
+  # Test the noarch package on Python 2 as well
+  - conda build --test --python=2.7 $HOME/miniconda/conda-bld/*/*.tar.bz2
+
+deploy:
+  # Upload to main label for tagged master builds
+  - provider: script
+    skip_cleanup: true
+    on:
+      branch: master
+      tags: true
+    script: anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
+  # Upload to dev label for untagged master builds
+  - provider: script
+    skip_cleanup: true
+    on:
+      branch: master
+      tags: false
+    script: anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup --label dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
