@@ -293,8 +293,10 @@ class DatamineCon(object):
             try:
                 del self._datacatalogresp
                 del self.url
+                self.url = DEFAULT_URL
             except Exception:
                 pass
+                self.url = DEFAULT_URL
 
         try:
             # Test to See if we already have a catalog item to fetch
@@ -992,7 +994,7 @@ class DatamineCon(object):
         return None
 
     def brokertech_tob_download(self, download=True):
-        """This function downloads Nex BrokerTech Data Sets.
+        """This function downloads Nex BrokerTech Top of Book Data Sets.
 
         This includes downloading any data avaliable in your catalog into the
         /NEXBROKERTECTOB, directory of the path variable
@@ -1028,7 +1030,7 @@ class DatamineCon(object):
 
 
     def brokertech_dob_download(self, download=True):
-        """This function downloads Nex BrokerTech Data Sets.
+        """This function downloads Nex BrokerTech Depth of Book Data Sets.
 
         This includes downloading any data avaliable in your catalog into the
         '/NEXBROKERTECDOB' directory of the path variable
@@ -1063,7 +1065,7 @@ class DatamineCon(object):
         return None
 
     def brokertech_fob_download(self, download=True):
-        """This function downloads Nex BrokerTech Data Sets.
+        """This function downloads Nex BrokerTech Full Book Data Sets.
 
         This includes downloading any data avaliable in your catalog into the
         'NEXBROKERTECFOB' directory of the path variable
@@ -1096,7 +1098,6 @@ class DatamineCon(object):
                 print('Download NEXBROKERTECFOB Data Complete')
 
         return None
-
 
 
 
