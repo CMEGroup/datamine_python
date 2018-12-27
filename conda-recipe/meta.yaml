@@ -19,6 +19,7 @@ requirements:
   run:
     - python
     - requests
+    - tqdm
 
 test:
   requires:
