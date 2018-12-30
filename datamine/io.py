@@ -9,14 +9,16 @@ TODO:  Proper Documentation on Functions
 TODO: ReadMe Update with examples.
 """
 
+from urllib3.util import parse_url, Retry
+
 import requests
-from requests.auth import HTTPBasicAuth
 import pandas as pd
 import pathlib
 import gzip
 import cgi
 import shutil
 import os
+import sys
 import json
 import multiprocessing
 import csv
@@ -24,6 +26,14 @@ from pathlib import Path
 import tqdm as tqdm
 
 DEFAULT_URL = 'https://datamine.cmegroup.com/cme/api/v1/list'
+PAGE_SIZE = 1000
+NO_LIMIT = sys.maxsize
+
+def _url_params(url):
+    url = parse_url(url)
+    if not url.query:
+        return {}
+    return dict(map(lambda x: x.split('=', 1), url.query.split('&')))
 
 
 class RequestError(RuntimeError):
@@ -69,42 +79,15 @@ class DatamineCon(object):
         :param url: The number of threads for downloading files.
         """
         self.url = url
-        self.user = username
-        self.password = password
+        self.session = requests.Session()
+        self.session.auth = requests.auth.HTTPBasicAuth(username, password)
+        httpa = requests.adapters.HTTPAdapter(max_retries=Retry(read=3, backoff_factor=2))
+        self.session.mount('', httpa)
         self.path = path
         self.data_catalog = {}
+        self._dataset = None
+        self._limit = 0
         self.processes = 4
-
-    def _do_call_json(self, url, retry=False):
-        """Download catalog helper function from url.
-
-        Returns json response with personal data catalog.
-
-        """
-        if self.debug:
-            print('do call with url: %s' % (url))
-
-        for attempt in range(1 + bool(retry)):
-            try:
-                resp = requests.get(self.url, timeout=60,
-                                    auth=HTTPBasicAuth(self.user, self.password))
-            except Exception:
-                if attempt:
-                    raise
-
-        if self.debug:
-            print('resp code: %s, resp text: %s' % (resp.status_code, resp.text))
-
-        try:
-            result = resp.json()
-        except Exception as e:
-            raise RequestError(
-                'Failed to parse JSON response %s. Resp Code: %s. Text: %s' % (e, resp.status_code, resp.text))
-
-        finally:
-            resp.connection.close()
-
-        return result
 
     def _do_call_data(self, package):
         """Download datamine hosted file from url to self.path location
@@ -126,8 +109,7 @@ class DatamineCon(object):
 
         if path is None:
             path = self.path
-        response = requests.get(url, params=request_param, timeout=60,
-                                auth=HTTPBasicAuth(self.user, self.password), stream=True)
+        response = self.session.get(url, params=request_param, timeout=60, stream=True)
 
         if self.debug:
             print('Get Response Return: response code: %s, request params: %s, requested URL: %s,' % (response.status_code, request_param, response.url ))
@@ -260,7 +242,7 @@ class DatamineCon(object):
 
         return data
 
-    def get_catalog(self, dataset=None, limit=9e10, start=None, refresh=False):
+    def get_catalog(self, dataset=None, limit=NO_LIMIT, refresh=False):
         """Get the list of data files avaliable to you
         This may take time depending upon how many items are currenty
         have avaliable to your login.  Items are retrieved in groups of 1000
@@ -271,70 +253,52 @@ class DatamineCon(object):
         :type dataset: string
         :param dataset: The specific dataset items that you would like to retrieve
 
-        :type limit: int64
+        :type limit: integer
         :param limit: Limits the amount of catalog items you would like to retrieve.
 
-        :type start: int64
-        :param start: The page number to start pulling items from.
-
         :type refresh: bool
-        :param refresh: Set to True if you want to refresh the local copy.
+        :param refresh: Set to True if you want to force a refresh of the local copy.
 
         Creates
         -------
         :creates: python.dictionary self.data_catalog -- containing custom data catalog avaliable.
 
-        eturns
+        Returns
         -------
         Returns None -- dictionary of the data catalog from Datamine
         """
 
-        if refresh:
+        # No need to download more data if:
+        #   -- if the dataset matches, and the new limit is smaller
+        #   -- if the previous dataset was None, and there was no limit
+        is_valid = (self._dataset == dataset and limit <= self._limit or
+                    self._dataset is None and self._limit == NO_LIMIT)
+        if refresh or not is_valid:
+            self.data_catalog = {}
+            self._dataset = None
+            self._limit = 0
+        if is_valid:
+            return
+        params = {}
+        if dataset:
+            params['dataset'] = dataset
+        while len(self.data_catalog) <= limit:
+            params['limit'] = min(PAGE_SIZE, limit - len(self.data_catalog))
+            resp = self.session.get(self.url, timeout=60, params=params)
+            if resp.status_code != 200:
+                raise RequestError('Status code {} obtained for url: {}'.format(resp.status_code, resp.url))
             try:
-                del self._datacatalogresp
-                del self.url
-                self.url = DEFAULT_URL
-            except Exception:
-                pass
-                self.url = DEFAULT_URL
-
-        try:
-            # Test to See if we already have a catalog item to fetch
-            if self._datacatalogresp is None:
-                pass
-        except Exception:
-            # this is the case where for first time running of the get catalog
-            # support specific data set request
-            if dataset is not None:
-                self.url = self.url + '?dataset=%s' % dataset
-                self._datacatalogresp = self._do_call_json(self.url)
-
-            # no specific dataset set by the user .
-            else:
-                self._datacatalogresp = self._do_call_json(self.url)
-            for item in self._datacatalogresp['files']:
-                self.data_catalog[item['fid']] = item
-
-        # Get Paging Items if Greater than 1000 Items
-        while self._datacatalogresp['paging']['next'] is not '' and len(self.data_catalog) < limit:
-            # print('paging Catalog: %s' % (self._datacatalogresp['paging']['next']))
-            print('paging Catalog: %s' % (self._datacatalogresp['paging']['next'].split('&')[-1]))
-            self._datacatalogresp = self._do_call_json(self._datacatalogresp['paging']['next'])
-            # print (self._datacatalogresp['files'])
-            try:
-                for item in self._datacatalogresp['files']:
-                    self.data_catalog[item['fid']] = item
-            # debuging failed responses
-
+                response = resp.json()
             except Exception as e:
-                print(e)
-
-                # print (self.datacatalogresp)
-
-                return None
-            # todo remove this break when the catalog paging is working again!
-            break
-        return None
+                raise RequestError('Unexpected error decoding JSON response:\n  Error message: {}\n  Text: {}'.format(e.message, resp.text))
+            self.data_catalog.update((item['fid'], item) for item in response['files'])            
+            next_url = response['paging']['next']
+            if not next_url:
+                limit = NO_LIMIT
+                break
+            params = _url_params(next_url)
+        self._limit = max(limit, len(self.data_catalog))
+        self._dataset = dataset
 
     def crypto_load(self, download=True):
         """This function loads CME Crypto Data -- Bitcoin and Etherium.  This includes
