@@ -108,7 +108,8 @@ class DatamineCon(object):
         record = self.data_catalog[fid]
         supplied_url, params = _url_params(record['url'])
         assert supplied_url == self.url + '/download'
-        with self._call_api('download', params, stream=True) as response:
+        response = self._call_api('download', params, stream=True)
+        try:
             # The filename is embedded in the Content-Disposition header
             header = response.headers.get('content-disposition', '')
             try:
@@ -123,6 +124,10 @@ class DatamineCon(object):
                     if chunk:
                         target.write(chunk)
                         target.flush()
+        finally:
+            # It would be more convenient to use the context manager idiom,
+            # but avoiding it allows us to support older versions of requests.
+            response.close()
 
     def download_data(self, dataset=None):
         """Download the entire catalog or a specific dataset to the local directory.
@@ -199,6 +204,8 @@ class DatamineCon(object):
                 break
 
             resp = self._call_api('list', params)
+            if resp.text == '"Could not initiate UNO connection"':
+                raise RequestError('Invalid username/password combination.')
             try:
                 response = resp.json()
                 if response is None:
