@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import glob
 
+from importlib import import_module
 from ..utils import tqdm_execute_tasks, logger
 
 __all__ = ['Loader']
@@ -13,6 +14,41 @@ class Loader(object):
     dataset = None
     fileglob = '*.csv'
     index = None
+
+    _by_name = None
+
+    @classmethod
+    def _load_datasets(cls):
+        cls._by_name = {}
+        pkg = __name__.rsplit('.', 1)[0]
+        fpath, base = os.path.split(__file__)
+        for fname in glob.glob(os.path.join(fpath, '*.py')):
+            fname = os.path.basename(fname)
+            if fname in (base, '__init__.py'):
+                continue
+            module = import_module('.' + fname[:-3], pkg)
+            for key, value in module.__dict__.items():
+                if isinstance(value, cls):
+                    if not isinstance(value.dataset, str):
+                        raise RuntimeError('Invalid Loader: dataset must be a string, not {}'.format(type(value.dataset)))
+                    elif value.dataset in cls._by_name:
+                        raise RuntimeError('Invalid Loader: duplicate loader for {} dataset'.format(value.dataset))
+                    else:
+                        cls._by_name[value.dataset] = value
+
+    @classmethod
+    def datasets(cls):
+        if cls._by_name is None:
+            cls._load_datasets()
+        return list(cls._by_name.keys())
+
+    @classmethod
+    def by_name(cls, dataset):
+        if cls._by_name is None:
+            cls._load_datasets()
+        if dataset not in cls._by_name:
+            raise RuntimeError('Dataset not found: {}'.format(dataset))
+        return cls._by_name[dataset]
 
     def _set_dtypes(self, df):
         if self.dtypes is None:

@@ -17,6 +17,7 @@ import os
 import sys
 
 from .utils import tqdm_execute_tasks, MAX_WORKERS, logger
+from .loaders import Loader
 
 DEFAULT_URL = 'https://datamine.cmegroup.com/cme/api/v1'
 NO_LIMIT = sys.maxsize
@@ -231,6 +232,25 @@ class DatamineCon(object):
         self._limit = max(limit, len(self.data_catalog))
         self._dataset = dataset
 
+    def load_dataset(self, dataset, download=True, limit=None):
+        """Load a dataset, optionally downloading files listed in the catalog.
+           Parameters
+           ----------
+           :param download: Attempt to download any data avaliable before loading data from local disk.
+           :type download: bool
+
+           :param limit: Limit the number of files loaded to the given number.
+           :type limit: integer, or None
+
+           Returns
+           -------
+           :returns: pandas.DataFrame
+        """
+        if download:
+            self.download_data(dataset)
+        path = os.path.join(self.path, dataset)
+        return Loader.by_name(dataset).load(path, limit=limit)
+
     def crypto_load(self, download=True):
         """This function loads CME Crypto Data -- Bitcoin and Etherium.  This includes
         downloading any data avaliable in your catalog into the
@@ -252,12 +272,7 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
-        if download:
-            self.download_data('CRYPTOCURRENCY')
-        from .loaders.cryptocurrency import cryptocurrencyLoader
-        path = os.path.join(self.path, 'CRYPTOCURRENCY')
-        self.crypto_DF = cryptocurrencyLoader.load(path)
+        self.crypto_DF = self.load_dataset('CRYPTOCURRENCY')
 
     def MBO_download(self, download=True):
         """This function downloads CME MBO Data.  This
@@ -304,11 +319,7 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-        if download:
-            self.download_data('TELLUSLABS')
-        from .loaders.telluslabs import tellusLabsLoader
-        path = os.path.join(self.path, 'TELLUSLABS')
-        self.tellus_labs_DF = tellusLabsLoader.load(path)
+        self.tellus_labs_DF = self.load_dataset('TELLUSLABS')
 
     def time_sales_load(self, download=True):
         """This function loads time and sales data, often refered to as
@@ -331,11 +342,7 @@ class DatamineCon(object):
         :returns:  None
 
         """
-        if download:
-            self.download_data('TICK')
-        from .loaders.tick import tickLoader
-        path = os.path.join(self.path, 'TICK')
-        self.time_sales_DF = tickLoader.load(path)
+        self.time_sales_DF = self.load_dataset('TICK')
 
     def orbital_insights_load(self, download=True):
         """This function loads Orbital Insights Data.
@@ -360,11 +367,7 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-        if download:
-            self.download_data('ORBITALINSIGHT')
-        from .loaders.orbitalinsight import orbitalInsightLoader
-        path = os.path.join(self.path, 'ORBITALINSIGHT')
-        self.orbital_insights_DF = orbitalInsightLoader.load(path)
+        self.orbital_insights_DF = self.load_dataset('ORBITALINSIGHT')
 
     def eris_load(self, download=True):
         """This function loads Eris Data Sets.
@@ -388,12 +391,7 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
-        if download:
-            self.download_data('ERIS')
-        from .loaders.eris import erisLoader
-        path = os.path.join(self.path, 'ERIS')
-        self.eris_DF = erisLoader.load(path)
+        self.eris_DF = self.load_dataset('ERIS')
 
     def bantix_downloads(self, download=True):
         """This function downloads bantix Data Sets.
@@ -416,7 +414,6 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
         if download:
             self.download_data('BANTIX')
 
@@ -442,12 +439,7 @@ class DatamineCon(object):
             -------
             :returns:  None
             """
-
-        if download:
-            self.download_data('RSMETRICS')
-        from .loaders.rsmetrics import rsMetricsLoader
-        path = os.path.join(self.path, 'RSMETRICS')
-        self.rsmetrics_DF = rsMetricsLoader.load(path)
+        self.rsmetrics_DF = self.load_dataset('RSMETRICS')
 
     def brokertech_tob_download(self, download=True):
         """This function downloads Nex BrokerTech Top of Book Data Sets.
@@ -471,7 +463,6 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
         if download:
             self.download_data('NEXBROKERTECTOB')
 
@@ -497,7 +488,6 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
         if download:
             self.download_data('NEXBROKERTECDOB')
 
@@ -523,6 +513,5 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
         if download:
             self.download_data('NEXBROKERTECFOB')
