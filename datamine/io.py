@@ -10,20 +10,27 @@ TODO: ReadMe Update with examples.
 """
 
 import requests
-from requests.auth import HTTPBasicAuth
-import pandas as pd
+import urllib3
 import pathlib
-import gzip
 import cgi
-import shutil
 import os
-import json
-import multiprocessing
-import csv
-from pathlib import Path
-import tqdm as tqdm
+import sys
 
-DEFAULT_URL = 'https://datamine.cmegroup.com/cme/api/v1/list'
+from .utils import tqdm_execute_tasks, MAX_WORKERS, logger
+from .loaders import Loader
+
+DEFAULT_URL = 'https://datamine.cmegroup.com/cme/api/v1'
+NO_LIMIT = sys.maxsize
+TIMEOUTS = (3.05, 60)
+PAGE_SIZE = 1000
+CHUNK_SIZE = 1024
+
+
+def _url_params(url):
+    parts = url.split('?', 1)
+    if len(parts) == 1:
+        return parts[0], None
+    return parts[0], dict(map(lambda x: x.split('=', 1), parts[1].split('&')))
 
 
 class RequestError(RuntimeError):
@@ -50,7 +57,7 @@ class DatamineCon(object):
     debug = False
 
     def __init__(self, path='./', username=None, password=None,
-                 url=DEFAULT_URL, processes=4):
+                 url=DEFAULT_URL, threads=MAX_WORKERS):
         """creates the variables associated with the class
 
         :type path: string
@@ -69,198 +76,74 @@ class DatamineCon(object):
         :param url: The number of threads for downloading files.
         """
         self.url = url
-        self.user = username
-        self.password = password
+
+        # Leverage basic request/urllib3 functionality as much as possible:
+        # Persistent sessions, connection pooling, retry management
+        self.session = requests.Session()
+        self.session.auth = requests.auth.HTTPBasicAuth(username, password)
+        retry = urllib3.util.Retry(read=3, backoff_factor=2, status_forcelist=[400])
+        adapter = requests.adapters.HTTPAdapter(max_retries=retry)
+        self.session.mount('', adapter)
+
         self.path = path
         self.data_catalog = {}
-        self.processes = 4
+        self._dataset = None
+        self._limit = -1
+        self.threads = threads
 
-    def _do_call_json(self, url, retry=False):
-        """Download catalog helper function from url.
+    def _call_api(self, endpoint, params, stream=False):
+        url = self.url + '/' + endpoint
+        param_str = '&'.join('{}={}'.format(*p) for p in params.items())
+        logger.debug('_call_api: {}'.format(param_str))
+        return self.session.get(url, timeout=TIMEOUTS, params=params, stream=stream)
 
-        Returns json response with personal data catalog.
+    def download_file(self, fid):
+        """Download a single file denoted by the given FID.
 
+           :type fid: string
+           :param fid: The FID of the file to be retrieved.
         """
-        if self.debug:
-            print('do call with url: %s' % (url))
 
-        for attempt in range(1 + bool(retry)):
+        if fid not in self.data_catalog:
+            raise RequestError('FID not found in the catalog: {}'.format(fid))
+        record = self.data_catalog[fid]
+        supplied_url, params = _url_params(record['url'])
+        assert supplied_url == self.url + '/download'
+        response = self._call_api('download', params, stream=True)
+        try:
+            # The filename is embedded in the Content-Disposition header
+            header = response.headers.get('content-disposition', '')
             try:
-                resp = requests.get(self.url, timeout=60,
-                                    auth=HTTPBasicAuth(self.user, self.password))
+                filename = cgi.parse_header(header)[1]['filename']
             except Exception:
-                if attempt:
-                    raise
-
-        if self.debug:
-            print('resp code: %s, resp text: %s' % (resp.status_code, resp.text))
-
-        try:
-            result = resp.json()
-        except Exception as e:
-            raise RequestError(
-                'Failed to parse JSON response %s. Resp Code: %s. Text: %s' % (e, resp.status_code, resp.text))
-
-        finally:
-            resp.connection.close()
-
-        return result
-
-    def _do_call_data(self, package):
-        """Download datamine hosted file from url to self.path location
-
-        URL is expected to have a Content-Disposition header telling us what
-        filename to use.
-
-        Returns None.
-
-        """
-
-
-        url = package.get('url')
-        path = package.get('path')
-        request_param = package.get('params')
-
-        if self.debug:
-            print('do GET with url: %s, params: %s' % (url, request_param))
-
-        if path is None:
-            path = self.path
-        response = requests.get(url, params=request_param, timeout=60,
-                                auth=HTTPBasicAuth(self.user, self.password), stream=True)
-
-        if self.debug:
-            print('Get Response Return: response code: %s, request params: %s, requested URL: %s,' % (response.status_code, request_param, response.url ))
-
-        if response.status_code != 200:
-            raise RequestError('Request Failed: %s. Text: %s' % (response.status_code, response.text))
-
-        #load the returned parameters
-
-        try:
-            params = cgi.parse_header(
-                response.headers.get('Content-Disposition', ''))[-1]
-        except:
-            print (
-                'No parameter response. Response Code: %s | Response Text: %s | Request URL: %s | Reponse Header/Parameters: %s' %
-                (response.status_code, response.text, response.url, response.headers.get('Content-Disposition', '')))
-
-
-        if 'filename' not in params:
-            print ('Could not find a FILENAME in parameter response. Response Code: %s | Response Text: %s | Request URL: %s | Reponse Header/Parameters: %s' %
-                               (response.status_code, response.text, response.url, response.headers.get('Content-Disposition', '')))
-
-
-
-        try:
-            filename = os.path.basename(params['filename'])
-            abs_path = os.path.join(path, filename)
+                raise RequestError('Expected a "filename" entry in the Content-Disposition header found:\n  {}'.format(header))
+            dest_path = os.path.join(self.path, record['dataset'])
+            pathlib.Path(dest_path).mkdir(parents=True, exist_ok=True)
+            abs_path = os.path.join(dest_path, os.path.basename(filename))
             with open(abs_path, 'wb') as target:
-                response.raw.decode_content = True
-                shutil.copyfileobj(response.raw, target)
-        except Exception as e:
-            print (
-                'Failed to Download file response %s. Resp Code: %s' % (e, response.status_code))
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    if chunk:
+                        target.write(chunk)
+                        target.flush()
         finally:
-            response.connection.close()
+            # It would be more convenient to use the context manager idiom,
+            # but avoiding it allows us to support older versions of requests.
+            response.close()
 
-        return None
+    def download_data(self, dataset=None):
+        """Download the entire catalog or a specific dataset to the local directory.
 
-    def _download_data(self, dataset, fids=[]):
-        """Download entire or specific by fids datamine datasets to local directory set by self.path
-
-        :type dataset: string
+        :type dataset: string, or None
         :param dataset: The specific CME Datamine dataset name as retreived from catalog.
-
-        :type fids: list of stings
-        :param fids: The file ID numbers from self.data_catalog if you want just specific item. Else will pull all avalable.
-
-        Returns None.
-
-        """
-        if self.debug:
-            print('total Items For Retreval from CME Datamine: %s' % (len(fids)))
-
-        # Create sub directory for files
-        pathlib.Path(self.path + dataset).mkdir(parents=True, exist_ok=True)
-
-        # Build List of Fids if not supplied
-        if len(fids) == 0:
-            try:
-                dataCatalogDF = pd.DataFrame.from_dict(self.data_catalog).T
-                fids = dataCatalogDF.loc[dataCatalogDF['dataset'] == dataset, 'fid']
-                if len(fids) == 0:
-                    # No Items to pull
-                    print('''No Items for %s in Catalog, Refresh Catalog via .get_catalog()?''')
-                    return 1
-            except Exception:
-                print('Error finding items in catalog. Refresh via .get_catalog()?')
-                return 1
-
-        # multithreading
-        pool = multiprocessing.Pool(processes=self.processes)
-
-        package = []
-        for fid in fids:
-            package += [{'url': self.data_catalog[fid]['url'].split('?')[0],
-                         'params': {'fid': fid},
-                         'path': self.path + dataset}]
-
-
-
-        if self.debug:
-            print (package)
-
-
-        pool.map(self._do_call_data, package)
-
-
-        pool.close()
-        pool.join()
-
-        del pool
-        return 0
-
-    def _load_files_from_disk(self, file, fileType='CSV', skipHeader=False):
-        """Helper function to load files from local disk from self.path
-        :type file: string
-        :param file: The specific file name
-
-        :type fileType: structureing
-        :param fileType: Only support 'CSV' currently
-
-        :type skipHeader: bool
-        :type skipHeader: skip the header of the file for processing.
-
-        Returns None.
-
+                        If None, the entire catalog is downloaded.
         """
 
-        if fileType == 'CSV':
-            data = []
-            # print (Path(file).suffix)
-            if (Path(file).suffix) == '.gz':
-                with gzip.open(file, "rt", newline="") as f:
-                    reader = csv.reader(f)
-                    for line in reader:
-                        data.append(line)
+        fids = [fid for fid, record in self.data_catalog.items()
+                if dataset is None or record['dataset'] == dataset]
+        description = 'downloading {} data'.format(dataset if dataset else 'all datasets')
+        tqdm_execute_tasks(self.download_file, fids, description, self.threads, mode='thread')
 
-            if (Path(file).suffix) == '.csv':
-
-                with open(file, 'rt') as csvfile:
-                    # print (file)
-                    tempData = csv.reader(csvfile,
-                                          delimiter=','
-                                          )
-                    # Workareound for telus lab and Orbital data headers
-                    if 'TELLUSLABS' or 'ORBITALINSIGHT' in file:
-                        next(tempData, None)
-                    for line in tempData:
-                        data.append(line)
-
-        return data
-
-    def get_catalog(self, dataset=None, limit=9e10, start=None, refresh=False):
+    def get_catalog(self, dataset=None, limit=None, refresh=False):
         """Get the list of data files avaliable to you
         This may take time depending upon how many items are currenty
         have avaliable to your login.  Items are retrieved in groups of 1000
@@ -271,70 +154,102 @@ class DatamineCon(object):
         :type dataset: string
         :param dataset: The specific dataset items that you would like to retrieve
 
-        :type limit: int64
+        :type limit: integer
         :param limit: Limits the amount of catalog items you would like to retrieve.
 
-        :type start: int64
-        :param start: The page number to start pulling items from.
-
         :type refresh: bool
-        :param refresh: Set to True if you want to refresh the local copy.
+        :param refresh: Set to True if you want to force a refresh of the local copy.
 
         Creates
         -------
         :creates: python.dictionary self.data_catalog -- containing custom data catalog avaliable.
 
-        eturns
+        Returns
         -------
         Returns None -- dictionary of the data catalog from Datamine
         """
+        logger.info('get_catalog: retrieving {}, limit {}'.format(dataset if dataset else 'all datasets', limit))
 
-        if refresh:
+        # No need to download more data if:
+        #   -- if the dataset matches, and the new limit is smaller
+        #   -- if the previous dataset was None, and there was no limit
+        if limit is None:
+            limit = NO_LIMIT
+        elif not isinstance(limit, int) or limit < 0:
+            raise RequestError('Invalid limit value: {!r}'.format(limit))
+        is_valid = (self._dataset == dataset and limit <= self._limit or
+                    self._dataset is None and self._limit == NO_LIMIT)
+
+        if refresh or not is_valid:
+            if self._limit >= 0:
+                reason = 'by request' if refresh else 'for new parameters'
+                logger.debug('get_catalog: refreshing {}'.format(reason))
+            self.data_catalog = {}
+            self._dataset = None
+            self._limit = 0
+            is_valid = False
+
+        if is_valid:
+            logger.info('get_catalog: requested data already downloaded')
+            return
+
+        params = {}
+        duplicates = 0
+        nrecs = len(self.data_catalog)
+        if dataset:
+            params['dataset'] = dataset
+        while True:
+            params['limit'] = min(PAGE_SIZE, limit - nrecs)
+            if params['limit'] <= 0:
+                logger.warning('get_catalog: {}-record limit reached'.format(limit))
+                break
+
+            resp = self._call_api('list', params)
+            if resp.text == '"Could not initiate UNO connection"':
+                raise RequestError('Invalid username/password combination.')
             try:
-                del self._datacatalogresp
-                del self.url
-                self.url = DEFAULT_URL
-            except Exception:
-                pass
-                self.url = DEFAULT_URL
+                response = resp.json()
+                if response is None:
+                    logger.warning('get_catalog: empty record obtained, assuming end of data reached')
+                    limit = NO_LIMIT
+                    break
+                files = response['files']
+                next_url = response['paging']['next']
+            except (ValueError, TypeError):
+                raise RequestError('Invalid JSON data:\n   URL: {}\n  Text: {}\n'.format(resp.url, resp.text))
 
-        try:
-            # Test to See if we already have a catalog item to fetch
-            if self._datacatalogresp is None:
-                pass
-        except Exception:
-            # this is the case where for first time running of the get catalog
-            # support specific data set request
-            if dataset is not None:
-                self.url = self.url + '?dataset=%s' % dataset
-                self._datacatalogresp = self._do_call_json(self.url)
+            self.data_catalog.update((item['fid'], item) for item in files)
+            orecs, nrecs = nrecs, len(self.data_catalog)
+            duplicates += orecs + len(files) - nrecs
 
-            # no specific dataset set by the user .
-            else:
-                self._datacatalogresp = self._do_call_json(self.url)
-            for item in self._datacatalogresp['files']:
-                self.data_catalog[item['fid']] = item
+            if not next_url:
+                logger.debug('get_catalog: end of data raeached')
+                limit = NO_LIMIT
+                break
+            _, params = _url_params(next_url)
 
-        # Get Paging Items if Greater than 1000 Items
-        while self._datacatalogresp['paging']['next'] is not '' and len(self.data_catalog) < limit:
-            # print('paging Catalog: %s' % (self._datacatalogresp['paging']['next']))
-            print('paging Catalog: %s' % (self._datacatalogresp['paging']['next'].split('&')[-1]))
-            self._datacatalogresp = self._do_call_json(self._datacatalogresp['paging']['next'])
-            # print (self._datacatalogresp['files'])
-            try:
-                for item in self._datacatalogresp['files']:
-                    self.data_catalog[item['fid']] = item
-            # debuging failed responses
+        logger.info('get_catalog: {} records downloaded, {} duplicates, {} saved'.format(nrecs + duplicates, duplicates, nrecs))
+        self._limit = max(limit, len(self.data_catalog))
+        self._dataset = dataset
 
-            except Exception as e:
-                print(e)
+    def load_dataset(self, dataset, download=True, limit=None):
+        """Load a dataset, optionally downloading files listed in the catalog.
+           Parameters
+           ----------
+           :param download: Attempt to download any data avaliable before loading data from local disk.
+           :type download: bool
 
-                # print (self.datacatalogresp)
+           :param limit: Limit the number of files loaded to the given number.
+           :type limit: integer, or None
 
-                return None
-            # todo remove this break when the catalog paging is working again!
-            break
-        return None
+           Returns
+           -------
+           :returns: pandas.DataFrame
+        """
+        if download:
+            self.download_data(dataset)
+        path = os.path.join(self.path, dataset)
+        return Loader.by_name(dataset).load(path, limit=limit)
 
     def crypto_load(self, download=True):
         """This function loads CME Crypto Data -- Bitcoin and Etherium.  This includes
@@ -357,72 +272,7 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
-        if download:
-
-            self._download_data('CRYPTOCURRENCY')
-
-            if self.debug:
-                print('Download Crypto Data Complete')
-
-        # Load BitCoin Files from Path
-        if self.debug:
-            print('Loading Cryptro Data')
-        crypto_dataDict = []
-        for file in tqdm.tqdm(os.listdir(self.path + 'CRYPTOCURRENCY/')):
-
-            if 'btcIndexJson' in file:
-                if self.debug:
-                    print('loading Cryptocurrency file from: %s' % (self.path + 'CRYPTOCURRENCY/%s' % file))
-
-                with gzip.open(self.path + 'CRYPTOCURRENCY/%s' % file, 'r') as f:
-                    for line in f:
-                        self.line = line
-
-                        lineDict = json.loads(line.decode('utf-8'))
-
-                        lineDict = lineDict.get('mdEntries', None)
-                        if lineDict is not None:
-                            lineDict = lineDict[0]
-                            crypto_dataDict.append(lineDict)
-        del f
-        del line
-
-        # Turn into DataFrame
-        self.crypto_DF = pd.DataFrame(crypto_dataDict)
-        del crypto_dataDict
-
-        # Set Types to save on memory size
-        # # Catagoricals
-        self.crypto_DF["mdEntryCode"] = self.crypto_DF["mdEntryCode"].astype('category')
-        self.crypto_DF["mdEntryType"] = self.crypto_DF["mdEntryType"].astype('category')
-        self.crypto_DF["mdUpdateAction"] = self.crypto_DF["mdUpdateAction"].astype('category')
-        self.crypto_DF["symbol"] = self.crypto_DF["symbol"].astype('category')
-        self.crypto_DF["openCloseSettlFlag"] = self.crypto_DF["openCloseSettlFlag"].astype('category')
-
-        # # Integers
-        self.crypto_DF["rptSeq"] = self.crypto_DF["rptSeq"].astype('int64')
-
-        # # floats
-        self.crypto_DF["netChgPrevDay"] = self.crypto_DF["netChgPrevDay"].astype('float')
-        self.crypto_DF["netPctChg"] = self.crypto_DF["netPctChg"].astype('float')
-        self.crypto_DF["mdEntryPx"] = self.crypto_DF["mdEntryPx"].astype('float')
-
-        # Dates and Times from two columns into a single one.  UTC time!
-        self.crypto_DF['mdEntryDateTime'] = pd.to_datetime(
-            self.crypto_DF['mdEntryDate'] +
-            '_' +
-            self.crypto_DF['mdEntryTime'],
-            format='%Y%m%d_%H:%M:%S.%f',
-            utc=True)
-
-        # Set Index
-        self.crypto_DF.set_index('mdEntryDateTime', inplace=True)
-
-        del self.crypto_DF['mdEntryDate']
-        del self.crypto_DF['mdEntryTime']
-
-        return None
+        self.crypto_DF = self.load_dataset('CRYPTOCURRENCY')
 
     def MBO_download(self, download=True):
         """This function downloads CME MBO Data.  This
@@ -445,9 +295,7 @@ class DatamineCon(object):
 
         """
         if download:
-            self._download_data('MBO')
-
-        return None
+            self.download_data('MBO')
 
     def tellus_labs_load(self, download=True):
         """This function loads Tellus Labs Data.
@@ -471,77 +319,7 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
-        if download:
-            self._download_data('TELLUSLABS')
-
-        # Create List of Files on Local Path for loading and structing
-
-        # Load NDVI SATTELNDVI
-        files = []
-        for file in os.listdir(self.path + 'TELLUSLABS/'):
-            if 'TELLUSLABS' and 'NDVI' in file:
-                files.append(self.path + 'TELLUSLABS/' + file)
-
-        pool = multiprocessing.Pool(processes=self.processes)
-        pool_outputs = pool.map(self._load_files_from_disk, files)
-        pool.close()
-        pool.join()
-        del pool
-
-        names = ['crop', 'country_iso', 'geo_level', 'geo_id',
-                 'geo_display_name', 'metric_date', 'SATTELNDVI']
-
-        tellus_labs_NDVI_DF = pd.DataFrame([y for x in pool_outputs for y in x], columns=names)
-        tellus_labs_NDVI_DF['measure'] = 'SATTELNDVI'
-        tellus_labs_NDVI_DF.rename(columns={'SATTELNDVI': 'value'}, inplace=True)
-
-        # Load CHI TELLUSCHIN
-        files = []
-        for file in os.listdir(self.path + 'TELLUSLABS/'):
-            if 'TELLUSLABS' and 'CHI' in file:
-                files.append(self.path + 'TELLUSLABS/' + file)
-
-        pool = multiprocessing.Pool(processes=self.processes)
-
-        pool_outputs = pool.map(self._load_files_from_disk, files)
-
-        pool.close()
-        pool.join()
-        del pool
-
-        names = ['crop', 'country_iso', 'geo_level', 'geo_id',
-                 'geo_display_name', 'metric_date', 'TELLUSCHIN']
-        tellus_labs_CHI_DF = pd.DataFrame([y for x in pool_outputs for y in x], columns=names)
-
-        tellus_labs_CHI_DF['measure'] = 'TELLUSCHIN'
-        tellus_labs_CHI_DF.rename(columns={'TELLUSCHIN': 'value'}, inplace=True)
-
-        # Join two sets together
-        self.tellus_labs_DF = pd.concat([tellus_labs_NDVI_DF, tellus_labs_CHI_DF])
-
-        # Set Types
-        # # Catagoricals
-        self.tellus_labs_DF["crop"] = self.tellus_labs_DF["crop"].astype('category')
-        self.tellus_labs_DF["country_iso"] = self.tellus_labs_DF["country_iso"].astype('category')
-        self.tellus_labs_DF["geo_level"] = self.tellus_labs_DF["geo_level"].astype('category')
-        self.tellus_labs_DF["geo_display_name"] = self.tellus_labs_DF["geo_display_name"].astype('category')
-        self.tellus_labs_DF["measure"] = self.tellus_labs_DF["measure"].astype('category')
-
-        # # Integers
-        self.tellus_labs_DF["geo_id"] = self.tellus_labs_DF["geo_id"].astype('int64')
-
-        # # floats
-        self.tellus_labs_DF["value"] = self.tellus_labs_DF["value"].astype('float')
-
-        # # Dates
-        self.tellus_labs_DF['metric_date'] = pd.to_datetime(
-            self.tellus_labs_DF['metric_date'], format='%Y-%m-%d')
-
-        # # Set Index
-        self.tellus_labs_DF.set_index('metric_date', inplace=True)
-
-        return None
+        self.tellus_labs_DF = self.load_dataset('TELLUSLABS')
 
     def time_sales_load(self, download=True):
         """This function loads time and sales data, often refered to as
@@ -564,90 +342,7 @@ class DatamineCon(object):
         :returns:  None
 
         """
-
-        if download:
-            if self._download_data('TICK') == 0:
-
-                pass
-            else:
-                print('Error: Downloading Tick Data')
-                return 1
-
-        names = ['trade_date', 'trade_time', 'trade_sequence_number', 'session_indicator',
-                 'ticker_symbol', 'future_option_index_indicator', 'contract_delivery_date',
-                 'trade_quantity', 'strike_price', 'trade_price', 'ask_bid_type',
-                 'indicative_quote_type', 'market_quote', 'close_open_type',
-                 'valid_open_exception', 'post_close', 'cancel_code_type',
-                 'insert_code_type', 'fast_late_indicator', 'cabinet_indicator',
-                 'book_indicator', 'entry_date', 'exchange_code']
-
-        files = []
-        for file in os.listdir(self.path + 'TICK/'):
-            if 'tick' in file:
-                files.append(self.path + 'TICK/' + file)
-
-        results = []
-        for file in tqdm.tqdm(files):
-            results = self._load_files_from_disk(file)
-
-        self.time_sales_DF = pd.DataFrame(results, columns=names)
-
-        del results
-
-        # Set Types per specifications:
-        # https://www.cmegroup.com/confluence/display/EPICSANDBOX/Post-Purchase+Information# Post-PurchaseInformation-LayoutGuides
-        # # Catagoricals
-        self.time_sales_DF["session_indicator"] = self.time_sales_DF["session_indicator"].astype('category')
-        self.time_sales_DF["ticker_symbol"] = self.time_sales_DF["ticker_symbol"].astype('category')
-        self.time_sales_DF["future_option_index_indicator"] = self.time_sales_DF[
-            "future_option_index_indicator"].astype('category')
-        self.time_sales_DF["close_open_type"] = self.time_sales_DF["close_open_type"].astype('category')
-        self.time_sales_DF["exchange_code"] = self.time_sales_DF["exchange_code"].astype('category')
-        self.time_sales_DF["ask_bid_type"] = self.time_sales_DF["ask_bid_type"].astype('category')
-
-        self.time_sales_DF["indicative_quote_type"] = self.time_sales_DF["indicative_quote_type"].astype('category')
-        self.time_sales_DF["indicative_quote_type"] = self.time_sales_DF["indicative_quote_type"].astype('category')
-        self.time_sales_DF["valid_open_exception"] = self.time_sales_DF["valid_open_exception"].astype('category')
-        self.time_sales_DF["post_close"] = self.time_sales_DF["post_close"].astype('category')
-        self.time_sales_DF["ask_bid_type"] = self.time_sales_DF["ask_bid_type"].astype('category')
-
-        self.time_sales_DF["cancel_code_type"] = self.time_sales_DF["cancel_code_type"].astype('category')
-
-        self.time_sales_DF["insert_code_type"] = self.time_sales_DF["insert_code_type"].astype('category')
-        self.time_sales_DF["fast_late_indicator"] = self.time_sales_DF["fast_late_indicator"].astype('category')
-        self.time_sales_DF["cabinet_indicator"] = self.time_sales_DF["cabinet_indicator"].astype('category')
-        self.time_sales_DF["book_indicator"] = self.time_sales_DF["book_indicator"].astype('category')
-
-        self.time_sales_DF["book_indicator"] = self.time_sales_DF["book_indicator"].astype('category')
-        self.time_sales_DF["book_indicator"] = self.time_sales_DF["book_indicator"].astype('category')
-
-        # # Integers
-        self.time_sales_DF["trade_sequence_number"] = self.time_sales_DF["trade_sequence_number"].astype('int64')
-        self.time_sales_DF["contract_delivery_date"] = self.time_sales_DF["contract_delivery_date"].astype('int64')
-        self.time_sales_DF["trade_quantity"] = self.time_sales_DF["trade_quantity"].astype('int64')
-        self.time_sales_DF["entry_date"] = self.time_sales_DF["entry_date"].astype('int64')
-
-        # # floats
-        self.time_sales_DF["strike_price"] = self.time_sales_DF["strike_price"].astype('float')
-        self.time_sales_DF["trade_price"] = self.time_sales_DF["trade_price"].astype('float')
-        self.time_sales_DF["strike_price"] = self.time_sales_DF["strike_price"].astype('float')
-        self.time_sales_DF["strike_price"] = self.time_sales_DF["strike_price"].astype('float')
-
-        # Dates and Times from two columns into a single one.
-        # UTC time assumption which may not be true for older data sets!
-
-        self.time_sales_DF['trade_date_time'] = pd.to_datetime(
-            self.time_sales_DF['trade_date'] +
-            '_' +
-            self.time_sales_DF['trade_time'],
-            format='%Y%m%d_%H:%M:%S',
-            utc=True)
-        self.time_sales_DF['trade_date'] = pd.to_datetime(
-            self.time_sales_DF['trade_date'], format='%Y%m%d')
-        # self.time_sales_DF['trade_time'] = pd.to_datetime(
-        #        self.time_sales_DF['trade_time'], format='%H:%M:%S')
-
-        return None
+        self.time_sales_DF = self.load_dataset('TICK')
 
     def orbital_insights_load(self, download=True):
         """This function loads Orbital Insights Data.
@@ -672,100 +367,7 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
-        if download:
-
-            if self._download_data('ORBITALINSIGHT') == 0:
-                pass
-            else:
-                return 1
-
-            if self.debug:
-                print('Download Orbital Insights Data Complete')
-
-        files = {}
-
-        # find unique collection of locations
-        for file in os.listdir(self.path + 'ORBITALINSIGHT/'):
-            if 'ORBITALINSIGHT' in file:
-                location = file.split('_')[1]
-
-                sublocation = file.split('_')[2]
-                if sublocation == '0':
-                    pass
-                else:
-                    location = location + '_' + sublocation
-                files[location] = []
-
-        # collect files into specific location group
-        for file in os.listdir(self.path + 'ORBITALINSIGHT/'):
-            if 'ORBITALINSIGHT' in file:
-                location = file.split('_')[1]
-                sublocation = file.split('_')[2]
-                if sublocation == '0':
-                    pass
-                else:
-                    location = location + '_' + sublocation
-                files[location].append(self.path + 'ORBITALINSIGHT/' + file)
-
-        # Since the file name has the measurement; we need to iterate through
-        # these and append the location data accordingly.
-
-        self.results = []
-        self.resultsDict = {}
-
-        names = ['date', 'volume_estimate', 'smoothed_estimate',
-                 'volume_estimate_stderr', 'storage_capacity_estimate',
-                 'total_available_tanks', 'sampled_tanks', 'truth_value_mb']
-
-        self.results = []
-        for key in tqdm.tqdm(files):
-            pool = multiprocessing.Pool(processes=self.processes)
-            pool_outputs = pool.map(self._load_files_from_disk, files[key])
-
-            pool.close()
-            pool.join()
-            del pool
-
-            tempDF = pd.DataFrame([y for x in pool_outputs for y in x], columns=names)
-            tempDF['location'] = key
-            tempDF.drop_duplicates(inplace=True)
-            self.results.append(tempDF)
-
-        self.orbital_insights_DF = pd.concat(self.results, ignore_index=True)
-        # Drop Duplicates
-        self.orbital_insights_DF.drop_duplicates(inplace=True)
-        self.orbital_insights_DF.reset_index(inplace=True, drop=True)
-
-        # Set Types
-        # # Catagoricals
-        self.orbital_insights_DF["location"] = self.orbital_insights_DF["location"].astype('category')
-
-        # # Integers
-        self.orbital_insights_DF["sampled_tanks"] = self.orbital_insights_DF["sampled_tanks"].astype('int64',
-                                                                                                     errors='ignore')
-        self.orbital_insights_DF["total_available_tanks"] = self.orbital_insights_DF["total_available_tanks"].astype(
-            'int64', errors='ignore')
-
-        # # floats
-        self.orbital_insights_DF["smoothed_estimate"] = self.orbital_insights_DF["smoothed_estimate"].astype('float',
-                                                                                                             errors='ignore')
-        self.orbital_insights_DF["storage_capacity_estimate"] = self.orbital_insights_DF[
-            "storage_capacity_estimate"].astype('float', errors='ignore')
-        self.orbital_insights_DF["truth_value_mb"] = self.orbital_insights_DF["truth_value_mb"].astype('float',
-                                                                                                       errors='ignore')
-        self.orbital_insights_DF["volume_estimate"] = self.orbital_insights_DF["volume_estimate"].astype('float',
-                                                                                                         errors='ignore')
-        self.orbital_insights_DF["volume_estimate_stderr"] = self.orbital_insights_DF["volume_estimate_stderr"].astype(
-            'float', errors='ignore')
-
-        # # Dates
-        self.orbital_insights_DF['date'] = pd.to_datetime(self.orbital_insights_DF['date'], format='%Y-%m-%d')
-
-        # Set Index
-        self.orbital_insights_DF.set_index('date', inplace=True)
-
-        return None
+        self.orbital_insights_DF = self.load_dataset('ORBITALINSIGHT')
 
     def eris_load(self, download=True):
         """This function loads Eris Data Sets.
@@ -789,76 +391,7 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
-        if download:
-
-            if self._download_data('ERIS') == 0:
-                pass
-            else:
-                return 1
-
-            if self.debug:
-                print('Download ERIS Data Complete')
-
-        names = ['Symbol', 'FinalSettlementPrice', 'EvaluationDate', 'FirstTradeDate',
-                 'ErisPAIDate', 'EffectiveDate', 'CashFlowAlignmentDate', 'MaturityDate', 'NPV (A)',
-                 'FixedNPV', 'FloatingNPV', 'Coupon (%)', 'FairCoupon (%)', 'FixedPayment', 'FloatingPayment',
-                 'NextFixedPaymentDate', 'NextFixedPaymentAmount', 'PreviousFixingDate', 'PreviousFixingRate',
-                 'NextFloatingPaymentDate', 'NextFloatingPaymentAmount', 'NextFixingDate', 'PreviousSettlementDate',
-                 'PreviousSettlementPrice', 'PreviousErisPAI', 'FedFundsDate', 'FedFundsRate (%)', 'AccrualDays',
-                 'DailyIncrementalErisPAI', 'AccruedCoupons (B)', 'ErisPAI (C)', 'SettlementPrice (100+A+B-C)',
-                 'RFQ NPV TickSize ($)', 'Nominal', 'ResetRateDescriptor', 'InterpolationFactor', 'HighTradePrice',
-                 'LowTradePrice', 'LastTradePrice', 'DailyContractVolume', 'Tag55(T)', 'Tag65(T)', 'Tag55(T+1)',
-                 'Tag65(T+1)', 'LastTradeDate', 'InitialSpeculatorMargin', 'SecondarySpeculatorMargin',
-                 'InitialHedgerMargin', 'SecondaryHedgerMargin', 'ExchangeSymbol (EX005)', 'BloombergTicker',
-                 'FirstFixingDate', 'Category', 'BenchmarkContractName', 'PV01', 'DV01', 'ShortName',
-                 'EffectiveYearMonth']
-
-        # Load Local Files
-        files = []
-        for file in os.listdir(self.path + 'ERIS/'):
-            if 'ERIS' in file:
-                files.append(self.path + 'ERIS/' + file)
-
-        results = []
-        for file in tqdm.tqdm(files):
-            results = self._load_files_from_disk(file)
-
-        self.eris_DF = pd.DataFrame(results, columns=names)
-
-        # Set Types
-        # # Catagoricals
-        self.eris_DF["Symbol"] = self.eris_DF["Symbol"].astype('category')
-
-        self.eris_DF["ResetRateDescriptor"] = self.eris_DF["ResetRateDescriptor"].astype('category')
-        self.eris_DF["ExchangeSymbol (EX005)"] = self.eris_DF["ExchangeSymbol (EX005)"].astype('category')
-        self.eris_DF["BloombergTicker"] = self.eris_DF["BloombergTicker"].astype('category')
-
-        # # Integers
-        self.eris_DF["AccrualDays"] = self.eris_DF["AccrualDays"].astype('int64', errors='ignore')
-        self.eris_DF["EffectiveYearMonth"] = self.eris_DF["EffectiveYearMonth"].astype('int64', errors='ignore')
-        self.eris_DF["Nominal"] = self.eris_DF["Nominal"].astype('int64', errors='ignore')
-
-        # # floats
-        floatItems = ['FinalSettlementPrice', 'NPV (A)', 'FixedNPV', 'FloatingNPV', 'Coupon (%)',
-                      'FairCoupon (%)', 'FixedPayment', 'FloatingPayment', 'NextFixedPaymentAmount',
-                      'PreviousFixingRate', 'NextFloatingPaymentAmount', 'PreviousSettlementPrice',
-                      'PreviousErisPAI', 'FedFundsRate (%)', 'DailyIncrementalErisPAI', 'AccruedCoupons (B)',
-                      'ErisPAI (C)',  'SettlementPrice (100+A+B-C)', 'InterpolationFactor',
-                      'HighTradePrice','PV01','DV01'
-                      ]
-        for floatItem in floatItems:
-            self.eris_DF[floatItems] = self.eris_DF[floatItems].astype('float', errors='ignore')
-
-        # # Dates
-        dateItems = ['EvaluationDate', 'FirstTradeDate', 'ErisPAIDate',
-                     'EffectiveDate', 'CashFlowAlignmentDate', 'MaturityDate', 'NextFixedPaymentDate',
-                     'PreviousFixingDate', 'NextFloatingPaymentDate', 'NextFixingDate', 'PreviousSettlementDate',
-                     'FedFundsDate','LastTradeDate','FirstFixingDate']
-        for dateItem in dateItems:
-            self.eris_DF[dateItem] = pd.to_datetime(self.eris_DF[dateItem], format='%m/%d/%Y', errors='ignore')
-
-
+        self.eris_DF = self.load_dataset('ERIS')
 
     def bantix_downloads(self, download=True):
         """This function downloads bantix Data Sets.
@@ -881,18 +414,8 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
         if download:
-
-            if self._download_data('BANTIX') == 0:
-                pass
-            else:
-                return 1
-
-            if self.debug:
-                print('Download BANTIX Data Complete')
-
-        return None
+            self.download_data('BANTIX')
 
     def rsmetrics_load(self, download=True):
         """This function loads RS Metrics metals Data Sets.
@@ -916,82 +439,7 @@ class DatamineCon(object):
             -------
             :returns:  None
             """
-
-        if download:
-
-            if self._download_data('RSMETRICS') == 0:
-                pass
-            else:
-                return 1
-
-            if self.debug:
-                print('Download RSMETRICS Data Complete')
-
-        names = ['Order', 'Ticker', 'Type', 'Full.Name', 'Name', 'Location.Type', 'Smelter.Storage',
-                 'Metal.Shape', 'Metal.Type', 'YearMonthDayUTC', 'Address', 'City', 'State', 'Zip',
-                 'Country', 'Employee.Cars', 'Containers', 'Trucks', 'Tippers', 'Total.Area.Metal.stocks.m2',
-                 'Area.Piles.m2', 'Area.Concentrate.Bags.m2', 'Area.Cathodes.m2', 'Area.Anodes.m2',
-                 'Comments', 'Notes', 'Time_Date', 'Time', 'Month', 'Day', 'Year', 'PrePost', 'DOW',
-                 'Week.End', 'Region', 'Subregion', 'Latitude', 'Longitude', 'DIRECTORY', 'GMP',
-                 'Location', 'Metal', 'YearMonth', 'Tot.Area' ,'Drop']
-
-        # Handle Weekly Subsriptions First
-        files = []
-        for file in os.listdir(self.path + 'RSMETRICS/'):
-            if 'RSMETRICS' and 'WEEKLY' in file:
-                files.append(self.path + 'RSMETRICS/' + file)
-
-        results = []
-        for file in tqdm.tqdm(files):
-            results = self._load_files_from_disk(file)
-
-        self.rsmetrics_DF = pd.DataFrame(results, columns=names)
-        del self.rsmetrics_DF['Drop']
-        self.rsmetrics_DF['File.Timing'] = 'Weekly'
-
-
-        # Handle Daily Subsriptions
-        files = []
-        for file in os.listdir(self.path + 'RSMETRICS/'):
-            if 'RSMETRICS' and 'DAILY' in file:
-                files.append(self.path + 'RSMETRICS/' + file)
-
-        results = []
-        for file in tqdm.tqdm(files):
-            results = self._load_files_from_disk(file)
-        rsmetrics_df_daily = pd.DataFrame(results, columns=names)
-        del rsmetrics_df_daily['Drop']
-        rsmetrics_df_daily['File.Timing'] = 'Daily'
-
-
-        #join daily and weekly
-        self.rsmetrics_DF = pd.concat([rsmetrics_df_daily, self.rsmetrics_DF])
-
-        del rsmetrics_df_daily
-
-        # Set Types
-        # # Catagoricals
-        catagoricalItems = ['Ticker','Type','Full.Name','Name','Location.Type',
-                            'Smelter.Storage','Metal.Shape','Metal.Type','Country','PrePost','PrePost',
-                            'Location','Metal']
-        for catagoricalItem in catagoricalItems:
-            self.rsmetrics_DF[catagoricalItem] = self.rsmetrics_DF[catagoricalItem].astype('category')
-
-
-        # # Integers
-        integerItems = ['Employee.Cars','Containers','Trucks','Tippers','Total.Area.Metal.stocks.m2',
-                        'Area.Piles.m2','Area.Concentrate.Bags.m2','Area.Cathodes.m2',
-                        'Area.Anodes.m2','Tot.Area']
-        for integerItem in integerItems:
-
-            self.rsmetrics_DF[integerItem] = self.rsmetrics_DF[integerItem].astype('int64', errors='ignore')
-
-        # # Dates
-        self.rsmetrics_DF['Notes'] = pd.to_datetime(self.rsmetrics_DF['Notes'], format='%Y-%m-%d')
-
-        self.rsmetrics_DF['Time_Date'] = pd.to_datetime(self.rsmetrics_DF['Time_Date'], format='%H:%M %m-%d-%Y')
-
-        return None
+        self.rsmetrics_DF = self.load_dataset('RSMETRICS')
 
     def brokertech_tob_download(self, download=True):
         """This function downloads Nex BrokerTech Top of Book Data Sets.
@@ -1015,19 +463,8 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
         if download:
-
-            if self._download_data('NEXBROKERTECTOB') == 0:
-                pass
-            else:
-                return 1
-
-            if self.debug:
-                print('Download NEXBROKERTECTOB Data Complete')
-
-        return None
-
+            self.download_data('NEXBROKERTECTOB')
 
     def brokertech_dob_download(self, download=True):
         """This function downloads Nex BrokerTech Depth of Book Data Sets.
@@ -1051,18 +488,8 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
         if download:
-
-            if self._download_data('NEXBROKERTECDOB') == 0:
-                pass
-            else:
-                return 1
-
-            if self.debug:
-                print('Download NEXBROKERTECDOB Data Complete')
-
-        return None
+            self.download_data('NEXBROKERTECDOB')
 
     def brokertech_fob_download(self, download=True):
         """This function downloads Nex BrokerTech Full Book Data Sets.
@@ -1086,21 +513,5 @@ class DatamineCon(object):
         -------
         :returns:  None
         """
-
         if download:
-
-            if self._download_data('NEXBROKERTECFOB') == 0:
-                pass
-            else:
-                return 1
-
-            if self.debug:
-                print('Download NEXBROKERTECFOB Data Complete')
-
-        return None
-
-
-
-
-
-
+            self.download_data('NEXBROKERTECFOB')
