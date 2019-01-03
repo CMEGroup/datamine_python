@@ -9,7 +9,6 @@ dependencies:
 - pytest-cov
 - pytest-spec
 - python=3
-- requests
+- requests=2.21.0
 - thrift
 - tqdm
-
