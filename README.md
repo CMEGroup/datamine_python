@@ -108,3 +108,12 @@ plt.show()
 ```
 ![Bitcoin RT Index Plot Example](https://github.com/CMEGroup/datamine_python/blob/master/examples/images/BitcoinRTIndexValue.png "Bitcoin Logo")
 
+
+## Questions and Comments?
+Please use the Issues feature.
+
+
+## Notice
+The information herein has been complied by CME Group for general informational and education purposes only and does not constitute trading advice or the solicitation of purchases or sale of futures, options, or swaps. The views in this video reflect solely those of the author and not necessarily those of CME Group or its affiliated institutions. All examples discussed are hypothetical situations, used for explanation purposes only, and should not be considered investment advice of the results of actual market experience. Although every attempt has been made to ensure the accuracy of the information herein, CME Group and its affiliates assume no responsibility for any errors or omissions. All data is sourced by CME Group unless otherwise stated. All matters pertaining to rules and specification herein are made subject to and are superseded by official CME, CBOT, NYMEX, and COMEX rules. Current rules should be consulted in all cases concerning contact specifications.
+ 
+CME Group, the Globe Logo, CME, Globex, E-Mini, CME Direct, CME Datamine and Chicago Mercantile Exchange are trademarks of Chicago Mercantile Exchange Inc.  CBOT is a trademark of the Board of Trade of the City of Chicago, Inc.  NYMEX is a trademark of New York Mercantile Exchange, Inc.  COMEX is a trademark of Commodity Exchange, Inc. All other trademarks are the property of their respective owners.
