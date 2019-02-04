@@ -19,8 +19,15 @@ your analysis needs.
 
 
 
-# How to Use This Package
+# How to Download This Package
 
+## Conda Repo
+
+```
+conda install datamine_python
+```
+
+## Manaully, via Github
 The following will clone this repo, including an environment.yml file that will create the 
 proper Anaconda environment with all the dependencies and launch the juptyer lab environment.
 
@@ -33,10 +40,12 @@ source activate  datamine
 juptyer notebook
 ```
 
+#
+
 # Example Usages
 
 
-The following quickly outline some of the simple 
+The following quickly outline some of the simple methods to access CME Datamine data
 
 
 ## Load My Data Catalog Items
