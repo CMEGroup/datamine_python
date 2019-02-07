@@ -26,6 +26,11 @@ your analysis needs.
 ```
 conda install datamine_python
 ```
+## PyPi
+
+```
+pip install datamine_python
+```
 
 ## Manaully, via Github
 The following will clone this repo, including an environment.yml file that will create the 
@@ -100,7 +105,7 @@ myDatamine.get_catalog(dataset='TELLUSLABS', limit=1000)
 myDatamine.get_catalog(dataset='RSMETRICS', limit=1000)
 ```
 
-## Use Bitcoin information in anlaysis
+## Use Bitcoin Information in Analysis
 The following example can be found in the [Load Datamine Data Locally Example Notebook](https://github.com/CMEGroup/datamine_python/blob/master/examples/Load%20Datamine%20Data%20Locally%20Example.ipynb)
 ```buildoutcfg
 myDatamine.get_catalog(dataset='CRYPTOCURRENCY', limit=1000)
