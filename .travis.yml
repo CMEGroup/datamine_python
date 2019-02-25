@@ -1,43 +1,43 @@
-# Don't use language: python; this gives us an unnecessary virtualenv
-language: c
-# Seems to be needed to prevent hanging in Python 2.7
-# https://github.com/travis-ci/travis-ci/issues/6861
-sudo: required
+language: generic
+sudo: false
+
+branches:
+  only:
+  - master
+  - "/^\\d+\\.\\d+.*$/"
 
 env:
   global:
-    - secure: "TO_BE_FILLED_IN"
+    secure: 6OguhbEZAccL4aREL4jeJWWQFInxybfEA8XujenYRasOedySIPmlml+OB9lSnQ8d7w40dAISgdB67kALUh1DkOLhA0omZ5o8Ij3Mu633iYIGHfDK6JVl8o715fSsMA9vBS54+yo5rn5jfPXaQNNwZyoGqg3BkzsjXUDdBvHBCMRnu5ysw8aOxESTaVtRbRSeA47hDzXub0dd0/2vgsr8hur86biTcCW1AZPGCN/kF55W8GDgg81UIuKlRlaCyBoUiM6fgMlD3AkeLyvERit3HtvXsoRkBZCoVG2aqEjPofenaGii2RHIsWOhscVMlK9iuPgocFvBT8YCwhmIxyN1sTcb5ASnZGUzYUJmZ0qnKHQgv87TprNfu/dfKIjbHxqbiajuUMp8XM5zGD7W5ge8UWh6FjHw63+4FzBfDAiLVUh3zUUmQUO/V9z2Cr698ARz/z7BpPZxGZutFmrn/9rwqNvz4FK/VTx2M8NtSn/sGG+SvgKTXiy5DmFyAzDxixs1XOrf0fBKPivbm8qTI/og+s+d284gA0ibBIzQIbo5XkPySZqfe5vvmTYo0m+UGI4ff5GYczLXJRk2ebIsR6O5PqFX/E2BjOmEc2QXbl+DxBuMddg+XEMjskcneYfwtgvn80EJnXZb73cywmLs26EIjJsuDBrdvUx473XXnW0LsSI=
 
 os:
-  - linux
+- linux
 
 install:
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then MINICONDA_OS=Linux; else MINICONDA_OS=MacOSX; fi
-  - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-$MINICONDA_OS-x86_64.sh -O miniconda.sh
-  - bash miniconda.sh -b -p "$HOME"/miniconda
-  - source "$HOME"/miniconda/etc/profile.d/conda.sh
-  - conda config --set always_yes yes --set changeps1 no --set auto_update_conda false
-  - conda install conda conda-build conda-verify
-  - conda info -a
-  - printenv | sort
+- wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+- bash miniconda.sh -b -p $HOME/miniconda
+- source $HOME/miniconda/bin/activate
+- conda config --set always_yes yes --set changeps1 no --set auto_update_conda no
+- conda install conda conda-build conda-verify anaconda-client
+- conda info -a
+- printenv | sort
 
 script:
-  - conda build conda.recipe --python=3.7
-  # Test the noarch package on Python 2 as well
-  - conda build --test --python=2.7 $HOME/miniconda/conda-bld/*/*.tar.bz2
+- conda build conda-recipe --python=3.7
+- conda build --test --python=2.7 $HOME/miniconda/conda-bld/*/*.tar.bz2
 
 deploy:
-  # Upload to main label for tagged master builds
-  - provider: script
-    skip_cleanup: true
-    on:
-      branch: master
-      tags: true
-    script: anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
-  # Upload to dev label for untagged master builds
-  - provider: script
-    skip_cleanup: true
-    on:
-      branch: master
-      tags: false
-    script: anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup --label dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
+- provider: script
+  skip_cleanup: true
+  on:
+    branch: master
+    tags: true
+  script: anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup $HOME/miniconda/conda-bld/*/*.tar.bz2
+    --force
+- provider: script
+  skip_cleanup: true
+  on:
+    branch: master
+    tags: false
+  script: anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup --label
+    dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force

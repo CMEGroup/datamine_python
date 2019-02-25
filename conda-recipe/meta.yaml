@@ -19,11 +19,13 @@ requirements:
   run:
     - python
     - requests
+    - urllib3
+    - pandas
     - tqdm
 
 test:
   requires:
-    - python {{ python }}
+    - python
   imports:
     - datamine
     - datamine.io
