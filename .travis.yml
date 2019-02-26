@@ -23,8 +23,11 @@ install:
 - printenv | sort
 
 script:
-- conda build conda-recipe --python=3.7
-- conda build --test --python=2.7 $HOME/miniconda/conda-bld/*/*.tar.bz2
+- conda build conda-recipe
+- conda build --test --extra-deps="python=2" $HOME/miniconda/conda-bld/*/*.tar.bz2
+# We're not uploading these, but we can at least ensure that they build.
+- python setup.py sdist
+- python setup.py bdist_wheel
 
 deploy:
 - provider: script
@@ -32,12 +35,14 @@ deploy:
   on:
     branch: master
     tags: true
-  script: anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup $HOME/miniconda/conda-bld/*/*.tar.bz2
+  script:
+  - anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup $HOME/miniconda/conda-bld/*/*.tar.bz2
     --force
 - provider: script
   skip_cleanup: true
   on:
     branch: master
     tags: false
-  script: anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup --label
+  script:
+  - anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup --label
     dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force

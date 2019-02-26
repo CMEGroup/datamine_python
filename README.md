@@ -17,41 +17,39 @@ your local copy.  This includes correct typing and other generic routines to sup
 your analysis needs.
 4. Examples of working with this data in Pandas via a collection of Ipyhon Notebook files.
 
+# Installation
 
+## Conda
 
-# How to Download This Package
-
-## Conda Repo
-
+The easiest way to install this package is to do so in a
+Python environment created with [Anaconda](https://www.anaconda.com/distribution/)
+or its minimalist alternative [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+Once this environment is installed and activated, simply run this command:
 ```
-conda install datamine_python
+conda install -c cmegroup datamine_python
 ```
+
 ## PyPi
 
-```
-pip install datamine_python
-```
+Installation from PyPi via `pip` is coming soon.
 
-## Manaully, via Github
-The following will clone this repo, including an environment.yml file that will create the 
-proper Anaconda environment with all the dependencies and launch the juptyer lab environment.
+## From source
 
-
+To install from source, clone this repository and execute
 ```
-git clone https://github.com/CMEGroup/datamine.git
-cd datamine
-conda env create
-source activate  datamine
-juptyer notebook
+pip install .
+```
+If you wish to install the package in writable mode for development, do
+```
+pip install -e .
 ```
 
-#
+# Example usage
 
-# Example Usages
-
-
-The following quickly outline some of the simple methods to access CME Datamine data
-
+The following sections quickly outline some of the simple methods to access
+CME Datamine data. For interactive use, we recommend the use of a
+[Jupyter](https://jupyter.org) notebook or the
+[JupyterLab](https://jupyterlab.readthedocs.io/en/latest) platform.
 
 ## Load My Data Catalog Items
 

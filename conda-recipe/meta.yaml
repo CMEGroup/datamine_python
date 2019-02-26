@@ -11,10 +11,11 @@ build:
   number: 0
   noarch: python
   script:
-    - pip install . --no-deps --ignore-installed --no-cache-dir
+    - {{ PYTHON }} -m pip install . --no-deps --ignore-installed --no-cache-dir
 
 requirements:
   host:
+    - python {{ python }}
     - pip
   run:
     - python
@@ -22,13 +23,14 @@ requirements:
     - urllib3
     - pandas
     - tqdm
+    - futures-compat
 
 test:
-  requires:
-    - python
   imports:
     - datamine
     - datamine.io
+    - datamine.utils
+    - datamine.loaders
 
 about:
   home: https://github.com/CMEGroup/datamine_python

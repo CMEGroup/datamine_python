@@ -11,7 +11,6 @@ TODO: ReadMe Update with examples.
 
 import requests
 import urllib3
-import pathlib
 import cgi
 import os
 import sys
@@ -118,7 +117,8 @@ class DatamineCon(object):
             except Exception:
                 raise RequestError('Expected a "filename" entry in the Content-Disposition header found:\n  {}'.format(header))
             dest_path = os.path.join(self.path, record['dataset'])
-            pathlib.Path(dest_path).mkdir(parents=True, exist_ok=True)
+            if not os.path.exists(dest_path):
+                os.makedirs(dest_path)
             abs_path = os.path.join(dest_path, os.path.basename(filename))
             with open(abs_path, 'wb') as target:
                 for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
