@@ -17,27 +17,39 @@ your local copy.  This includes correct typing and other generic routines to sup
 your analysis needs.
 4. Examples of working with this data in Pandas via a collection of Ipyhon Notebook files.
 
+# Installation
 
+## Conda
 
-# How to Use This Package
-
-The following will clone this repo, including an environment.yml file that will create the 
-proper Anaconda environment with all the dependencies and launch the juptyer lab environment.
-
-
+The easiest way to install this package is to do so in a
+Python environment created with [Anaconda](https://www.anaconda.com/distribution/)
+or its minimalist alternative [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+Once this environment is installed and activated, simply run this command:
 ```
-git clone https://github.com/CMEGroup/datamine.git
-cd datamine
-conda env create
-source activate  datamine
-juptyer notebook
+conda install -c cmegroup datamine_python
 ```
 
-# Example Usages
+## PyPi
 
+Installation from PyPi via `pip` is coming soon.
 
-The following quickly outline some of the simple 
+## From source
 
+To install from source, clone this repository and execute
+```
+pip install .
+```
+If you wish to install the package in writable mode for development, do
+```
+pip install -e .
+```
+
+# Example usage
+
+The following sections quickly outline some of the simple methods to access
+CME Datamine data. For interactive use, we recommend the use of a
+[Jupyter](https://jupyter.org) notebook or the
+[JupyterLab](https://jupyterlab.readthedocs.io/en/latest) platform.
 
 ## Load My Data Catalog Items
 
@@ -91,7 +103,7 @@ myDatamine.get_catalog(dataset='TELLUSLABS', limit=1000)
 myDatamine.get_catalog(dataset='RSMETRICS', limit=1000)
 ```
 
-## Use Bitcoin information in anlaysis
+## Use Bitcoin Information in Analysis
 The following example can be found in the [Load Datamine Data Locally Example Notebook](https://github.com/CMEGroup/datamine_python/blob/master/examples/Load%20Datamine%20Data%20Locally%20Example.ipynb)
 ```buildoutcfg
 myDatamine.get_catalog(dataset='CRYPTOCURRENCY', limit=1000)
