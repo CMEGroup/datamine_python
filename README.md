@@ -26,7 +26,7 @@ Python environment created with [Anaconda](https://www.anaconda.com/distribution
 or its minimalist alternative [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 Once this environment is installed and activated, simply run this command:
 ```
-conda install -c cmegroup datamine_python
+conda install -c cmegroup datamine
 ```
 
 ## PyPi
