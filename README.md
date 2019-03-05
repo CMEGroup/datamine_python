@@ -31,7 +31,10 @@ conda install -c cmegroup datamine_python
 
 ## PyPi
 
-Installation from PyPi via `pip` is coming soon.
+Installation from [PyPi](https://pypi.org/project/datamine/)
+```
+pip install datamine
+```
 
 ## From source
 
