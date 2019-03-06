@@ -5,8 +5,7 @@ https://datamine.cmegroup.com
 
 .. moduleauthor:: Aaron Walters <aaron.walters@cmegroup.com>
 
-TODO:  Proper Documentation on Functions
-TODO: ReadMe Update with examples.
+
 """
 
 import requests
@@ -392,6 +391,34 @@ class DatamineCon(object):
         :returns:  None
         """
         self.eris_DF = self.load_dataset('ERIS')
+
+
+    def oneqbit_load(self, download=True):
+        """This function loads 	1Qbit Data Sets.
+
+        This includes downloading any data avaliable in your catalog into the
+        /ERIS directory of the path variable set upon creating of the
+        connection.  It then loads and structures your local data into
+        into a pandas DataFrame.
+        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/Eris+PAI+Dataset
+        Parameters
+        ----------
+        :param download: Attempt to download any
+        data avaliable before loading data from local disk.
+        :type download: bool.
+
+        Creates
+        -------
+        :creates: pandas.DataFrame object.eris_DF
+
+        Returns
+        -------
+        :returns:  DF
+        """
+        self.oneqbit_DF = self.load_dataset('1QBIT')
+
+
+
 
     def bantix_downloads(self, download=True):
         """This function downloads bantix Data Sets.
