@@ -2,9 +2,9 @@
 
 # Overview
 
-CME Datamine is offered via a self-service cloud solution, where you can access more than 
-450 terabytes of historical data almost instantaneously, using some of the most flexible 
-data delivery methods available. Extensively back-test strategies using real benchmark 
+CME Datamine is offered via a self-service cloud solution, where you can access more than
+450 terabytes of historical data almost instantaneously, using some of the most flexible
+data delivery methods available. Extensively back-test strategies using real benchmark
 markets that date back as far as the 1970s, to help you gauge profitability and risk.
 
 This python package will support your rapid analysis by supplying a basic framework for
@@ -13,7 +13,7 @@ direct iteration with CME Datamine cloud system to accomplish the following task
 1. Load your data item catalog which you have subscribed
 2. Download your data items to your local machines from the cloud
 3. Specific data items automatically structured into a Pandas dataframe from
-your local copy.  This includes correct typing and other generic routines to support 
+your local copy.  This includes correct typing and other generic routines to support
 your analysis needs.
 4. Examples of working with this data in Pandas via a collection of Ipyhon Notebook files.
 
@@ -75,29 +75,30 @@ all items in your catalog.
 
 |  Data Set Name                | Data Type     | _dataset_ Tag  |
 |---                            |---            |---|
-|  CME Time and Sales           | Price         | TICK     | 
+|  CME Time and Sales           | Price         | TICK     |
 |  CME  Market Depth MBO        | Price         | MBO  |
-|  CME CF Crypto Currency       | Index         | CRYPTOCURRENCY  | 
-|  BrokerTech Top of Book       | Price         | NEXBROKERTECTOB  | 
-|  BrokerTech Depth of Book     | Price         | NEXBROKERTECDOB  | 
-|  BrokerTech Full Book         | Price         | NEXBROKERTECFOB  | 
-|  Eris PAI                     | Market Analytics | ERIS  | 
+|  CME CF Crypto Currency       | Index         | CRYPTOCURRENCY  |
+|  BrokerTech Top of Book       | Price         | NEXBROKERTECTOB  |
+|  BrokerTech Depth of Book     | Price         | NEXBROKERTECDOB  |
+|  BrokerTech Full Book         | Price         | NEXBROKERTECFOB  |
+|  Eris PAI                     | Market Analytics | ERIS  |
 
-  
+
 
 ### Third Party Data
 
 |  Data Set Name                | Data Type     | _dataset_ Tag  |
 |---                            |---            |---|
-|  TellusLabs                   | Alternative - Ags             | TELLUSLABS  | 
-|  Orbital Insight              | Alternative - Energy          | ORBITALINSIGHT  | 
-|  Bantix Technologies          | Market Analytics - Options    | BANTIX  | 
-|  RS Metrics                   | Alternative - Metals          | RSMETRICS  | 
+|  TellusLabs                   | Alternative - Ags             | TELLUSLABS  |
+|  Orbital Insight              | Alternative - Energy          | ORBITALINSIGHT  |
+|  Bantix Technologies          | Market Analytics - Options    | BANTIX  |
+|  RS Metrics                   | Alternative - Metals          | RSMETRICS  |
+|  1 Qbit                    | Market Analytics           | 1QBIT  |
 
 
 A complete list of data products can be reviewed on [CME Datamine]([https://datamine.cmegroup.com/#t=p&p=cme.dataHome)
- 
- 
+
+
 Example request for specific Data Sets using the _dataset_ tag.
 ```buildoutcfg
 myDatamine.get_catalog(dataset='CRYPTOCURRENCY', limit=1000)
@@ -130,5 +131,5 @@ Please use the Issues feature.
 
 ## Notice
 The information herein has been complied by CME Group for general informational and education purposes only and does not constitute trading advice or the solicitation of purchases or sale of futures, options, or swaps. The views in this video reflect solely those of the author and not necessarily those of CME Group or its affiliated institutions. All examples discussed are hypothetical situations, used for explanation purposes only, and should not be considered investment advice of the results of actual market experience. Although every attempt has been made to ensure the accuracy of the information herein, CME Group and its affiliates assume no responsibility for any errors or omissions. All data is sourced by CME Group unless otherwise stated. All matters pertaining to rules and specification herein are made subject to and are superseded by official CME, CBOT, NYMEX, and COMEX rules. Current rules should be consulted in all cases concerning contact specifications.
- 
+
 CME Group, the Globe Logo, CME, Globex, E-Mini, CME Direct, CME Datamine and Chicago Mercantile Exchange are trademarks of Chicago Mercantile Exchange Inc.  CBOT is a trademark of the Board of Trade of the City of Chicago, Inc.  NYMEX is a trademark of New York Mercantile Exchange, Inc.  COMEX is a trademark of Commodity Exchange, Inc. All other trademarks are the property of their respective owners.
