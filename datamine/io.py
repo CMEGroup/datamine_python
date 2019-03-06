@@ -397,10 +397,10 @@ class DatamineCon(object):
         """This function loads 	1Qbit Data Sets.
 
         This includes downloading any data avaliable in your catalog into the
-        /ERIS directory of the path variable set upon creating of the
+        /1QBIT directory of the path variable set upon creating of the
         connection.  It then loads and structures your local data into
         into a pandas DataFrame.
-        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/Eris+PAI+Dataset
+        SEE: https://www.cmegroup.com/market-data/faq-1qbit.html
         Parameters
         ----------
         :param download: Attempt to download any
@@ -409,7 +409,7 @@ class DatamineCon(object):
 
         Creates
         -------
-        :creates: pandas.DataFrame object.eris_DF
+        :creates: pandas.DataFrame object.oneqbit_DF
 
         Returns
         -------
