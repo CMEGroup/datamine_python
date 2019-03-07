@@ -1,5 +1,5 @@
 # CME Datamine
-
+[![Build Status](https://travis-ci.org/CMEGroup/datamine_python.svg?branch=master)](https://travis-ci.org/CMEGroup/datamine_python)
 # Overview
 
 CME Datamine is offered via a self-service cloud solution, where you can access more than
