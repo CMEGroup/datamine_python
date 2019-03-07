@@ -309,7 +309,7 @@ class DatamineCon(object):
 
         Parameters
         ----------
-        :param download: Attempt to download MBO data set.
+        :param download: Attempt to download STL data set.
         :type download: bool.
 
         Returns
