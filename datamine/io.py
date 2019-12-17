@@ -296,6 +296,30 @@ class DatamineCon(object):
         if download:
             self.download_data('MBO')
 
+
+    def STL_download(self, download=True):
+        """This function downloads CME STL Data.  This
+        downloads any data avaliable in your catalog into the
+        /STL directory of the path variable set upon creating of the
+        connection.
+        No attempt is made to load this data into python given
+        the size and unique use case.
+        See: https://www.cmegroup.com/confluence/display/EPICSANDBOX/STL+INT+Settlements
+        for specifications and other information about this data set.
+
+        Parameters
+        ----------
+        :param download: Attempt to download STL data set.
+        :type download: bool.
+
+        Returns
+        -------
+        :returns:  None
+
+        """
+        if download:
+            self.download_data('STL')
+
     def tellus_labs_load(self, download=True):
         """This function loads Tellus Labs Data.
         https://telluslabs.com/
