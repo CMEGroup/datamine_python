@@ -78,10 +78,11 @@ all items in your catalog.
 |  CME Time and Sales           | Price         | TICK     |
 |  CME  Market Depth MBO        | Price         | MBO  |
 |  CME CF Crypto Currency       | Index         | CRYPTOCURRENCY  |
-|  BrokerTech Top of Book       | Price         | NEXBROKERTECTOB  |
-|  BrokerTech Depth of Book     | Price         | NEXBROKERTECDOB  |
-|  BrokerTech Full Book         | Price         | NEXBROKERTECFOB  |
+|  BrokerTec Top of Book       | Price         | NEXBROKERTECTOB  |
+|  BrokerTec Depth of Book     | Price         | NEXBROKERTECDOB  |
+|  BrokerTec Full Book         | Price         | NEXBROKERTECFOB  |
 |  Eris PAI                     | Market Analytics | ERIS  |
+|  SSTL INT Settlements         | Price         | STL  |
 
 
 
