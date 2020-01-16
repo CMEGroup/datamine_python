@@ -3,20 +3,20 @@ from . import Loader
 import pandas as pd
 import os
 
-
 class OrbitalInsightLoader(Loader):
     dataset = 'ORBITALINSIGHT'
     fileglob = 'ORBITALINSIGHT_*.csv'
-
-    columns = ['date', 'volume_estimate', 'smoothed_estimate',
-               'volume_estimate_stderr', 'storage_capacity_estimate',
-               'total_available_tanks', 'sampled_tanks', 'truth_value_mb',
-               'location']
+    
+    columns = ['storage.capacity.estimate', 'volume.estimate.stderr', 'scaled.estimate.stderr',
+                         'total.available.tanks', 'smoothed.estimate', 'sampled.tanks.1w',
+                         'sampled.tanks.1d', 'volume.estimate', 'scaled.estimate', 'truth_value_mb',
+                         'sampled.tanks', 'date', 'location']
 
     dtypes = {'category': ('location',),
-              'int64': ('sampled_tanks', 'total_available_tanks'),
-              'float': ('smoothed_estimate', 'storage_capacity_estimate',
-                        'truth_value_mb', 'volume_estimate', 'volume_estimate_stderr'),
+              'int64': ('sampled.tanks', 'sampled.tanks.1d', 'sampled.tanks.1w', 'total.available.tanks'),
+              'float': ('smoothed.estimate', 'storage.capacity.estimate',
+                        'truth_value_mb', 'volume.estimate', 'volume.estimate.stderr',
+                        'scaled.estimate', 'scaled.estimate.stderr'),
               'date': 'date'}
 
     def _load(self, file):
@@ -26,6 +26,5 @@ class OrbitalInsightLoader(Loader):
         df = pd.read_csv(file, low_memory=False)
         df['location'] = location
         return df
-
 
 orbitalInsightLoader = OrbitalInsightLoader()

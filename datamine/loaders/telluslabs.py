@@ -2,7 +2,6 @@ from . import Loader
 
 import pandas as pd
 
-
 class TellusLabsLoader(Loader):
     dataset = 'TELLUSLABS'
     fileglob = 'TELLUSLABS_*.csv'
@@ -22,6 +21,5 @@ class TellusLabsLoader(Loader):
         df = pd.read_csv(file, low_memory=False)
         df['measure'] = df.columns[-1]
         return df
-
 
 tellusLabsLoader = TellusLabsLoader()

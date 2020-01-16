@@ -3,7 +3,6 @@ from . import Loader
 import glob
 import os
 
-
 class RSMetricsLoader(Loader):
     dataset = 'RSMETRICS'
 
@@ -28,6 +27,5 @@ class RSMetricsLoader(Loader):
     def _glob(self, path):
         base = os.path.join(path, 'RSMETRICS_*')
         return glob.glob(base + '_WEEKLY_*.csv') + glob.glob(base + '_DAILY_*.csv')
-
 
 rsMetricsLoader = RSMetricsLoader()

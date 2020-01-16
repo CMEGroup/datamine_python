@@ -4,7 +4,6 @@ import pandas as pd
 import gzip
 import json
 
-
 class CryptocurrencyLoader(Loader):
     dataset = 'CRYPTOCURRENCY'
     fileglob = '*_btcIndexJson.gz'
@@ -26,6 +25,5 @@ class CryptocurrencyLoader(Loader):
         result = pd.DataFrame(result)
         result['mdEntryDateTime'] = result['mdEntryDate'] + '_' + result['mdEntryTime']
         return result.drop(['mdEntryDate', 'mdEntryType'], axis=1)
-
 
 cryptocurrencyLoader = CryptocurrencyLoader()

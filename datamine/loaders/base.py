@@ -1,8 +1,10 @@
 import pandas as pd
 import os
 import glob
+import sys
 
 from importlib import import_module
+from importlib import reload
 from ..utils import tqdm_execute_tasks, logger
 
 __all__ = ['Loader']
@@ -12,6 +14,7 @@ class Loader(object):
     columns = None
     dtypes = None
     dataset = None
+    dataset_args = None
     fileglob = '*.csv'
     index = None
 
@@ -35,24 +38,35 @@ class Loader(object):
                         raise RuntimeError('Invalid Loader: duplicate loader for {} dataset'.format(value.dataset))
                     else:
                         cls._by_name[value.dataset] = value
+                        # {'BLOCK' : <datamine.loaders.block.BlockLoader object at 0x0000026E3AE01DD8>}
 
     @classmethod
     def datasets(cls):
         if cls._by_name is None:
             cls._load_datasets()
         return list(cls._by_name.keys())
-
+    
     @classmethod
-    def by_name(cls, dataset):
+    def by_name(cls, dataset, dataset_args = {}):
+        cls.dataset_args = dataset_args
         if cls._by_name is None:
             cls._load_datasets()
         if dataset not in cls._by_name:
             raise RuntimeError('Dataset not found: {}'.format(dataset))
         return cls._by_name[dataset]
-
+    
     def _set_dtypes(self, df):
         if self.dtypes is None:
             return
+        
+        column_check = []
+        for k, v in self.dtypes.items():
+            for value in v:
+                column_check.append(value)
+        if self.columns is not None:
+            if set(self.columns).difference(column_check):
+                print("Mismatched column names & dtypes. Mismatches:", set(self.columns).difference(column_check))
+                logger.error(("Mismatched column names & dtypes. Mismatches:", set(self.columns).difference(column_check)))
         for dtype, cols in self.dtypes.items():
             for col in ((cols,) if isinstance(cols, str) else cols):
                 if col in df:
@@ -98,7 +112,7 @@ class Loader(object):
             filenames = filenames[-limit:]
             nframes = limit
         if nframes == 0:
-            result = pd.DataFrame(columns=self.names)
+            result = pd.DataFrame(columns=self.columns)
             self._set_dtypes(result)
         elif nframes == 1:
             result = self._load_single(filenames[0])
