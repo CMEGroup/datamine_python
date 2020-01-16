@@ -65,3 +65,11 @@ screenshots/
 # npm
 package-lock.json
 
+data
+settings.json
+
+# datamine logs
+datamine.log
+
+# Spyder Project Files
+.spyproject
