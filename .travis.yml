@@ -24,7 +24,6 @@ install:
 
 script:
 - conda build conda-recipe
-- conda build --test --extra-deps="python=2" $HOME/miniconda/conda-bld/*/*.tar.bz2
 # We're not uploading these, but we can at least ensure that they build.
 - python setup.py sdist
 - python setup.py bdist_wheel
