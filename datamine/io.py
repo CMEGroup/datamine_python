@@ -5,7 +5,6 @@ https://datamine.cmegroup.com
 
 .. moduleauthor:: Aaron Walters <aaron.walters@cmegroup.com>
 
-
 """
 
 import requests
@@ -13,9 +12,13 @@ import urllib3
 import cgi
 import os
 import sys
+from datetime import datetime
+import logging
+
+# Generate logger
+logging.basicConfig(filename='datamine.log', filemode='w', format='%(levelname)s - %(asctime)s - %(message)s', level=logging.ERROR)
 
 from .utils import tqdm_execute_tasks, MAX_WORKERS, logger
-from .loaders import Loader
 
 DEFAULT_URL = 'https://datamine.cmegroup.com/cme/api/v1'
 NO_LIMIT = sys.maxsize
@@ -29,7 +32,6 @@ def _url_params(url):
     if len(parts) == 1:
         return parts[0], None
     return parts[0], dict(map(lambda x: x.split('=', 1), parts[1].split('&')))
-
 
 class RequestError(RuntimeError):
     pass
@@ -51,8 +53,8 @@ class DatamineCon(object):
 
         datamine.debug = True # turn on debug logging
     """
-
-    debug = False
+    
+    debug = False 
 
     def __init__(self, path='./', username=None, password=None,
                  url=DEFAULT_URL, threads=MAX_WORKERS):
@@ -114,16 +116,28 @@ class DatamineCon(object):
             try:
                 filename = cgi.parse_header(header)[1]['filename']
             except Exception:
-                raise RequestError('Expected a "filename" entry in the Content-Disposition header found:\n  {}'.format(header))
+                filename = 'error.txt'
+                print ('''File Handling Area, looking for Content-Disposition Header and Lacks a 'header'...''')
+                print('Expected a "filename" entry in the Content-Disposition header found:\n  {}'.format(header))
+                print('See log file for further detail.')
+                logging.error(str(record['dataset']) + ' ' + str(supplied_url) + ' ' + ' ' + str(params) + ' ' + ('Expected a "filename" entry in the Content-Disposition header found:\n  {}'.format(header)))
+                pass
+                             
             dest_path = os.path.join(self.path, record['dataset'])
             if not os.path.exists(dest_path):
-                os.makedirs(dest_path)
+                try:
+                    os.makedirs(dest_path)
+                except:
+                    pass
             abs_path = os.path.join(dest_path, os.path.basename(filename))
             with open(abs_path, 'wb') as target:
-                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                    if chunk:
-                        target.write(chunk)
-                        target.flush()
+                try:
+                    for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                        if chunk:
+                            target.write(chunk)
+                            target.flush()
+                except:
+                    pass
         finally:
             # It would be more convenient to use the context manager idiom,
             # but avoiding it allows us to support older versions of requests.
@@ -145,13 +159,13 @@ class DatamineCon(object):
     def get_catalog(self, dataset=None, limit=None, refresh=False):
         """Get the list of data files avaliable to you
         This may take time depending upon how many items are currenty
-        have avaliable to your login.  Items are retrieved in groups of 1000
+        have available to your login.  Items are retrieved in groups of 1000
         per the standard call support.
 
         Parameters
         ----------
         :type dataset: string
-        :param dataset: The specific dataset items that you would like to retrieve
+        :param dataset: The specific dataset items that you would like to retrieve.
 
         :type limit: integer
         :param limit: Limits the amount of catalog items you would like to retrieve.
@@ -161,7 +175,7 @@ class DatamineCon(object):
 
         Creates
         -------
-        :creates: python.dictionary self.data_catalog -- containing custom data catalog avaliable.
+        :creates: python.dictionary self.data_catalog -- containing custom data catalog available.
 
         Returns
         -------
@@ -231,7 +245,7 @@ class DatamineCon(object):
         self._limit = max(limit, len(self.data_catalog))
         self._dataset = dataset
 
-    def load_dataset(self, dataset, download=True, limit=None):
+    def load_dataset(self, dataset, download=True, limit=None, dataset_args = {}):
         """Load a dataset, optionally downloading files listed in the catalog.
            Parameters
            ----------
@@ -245,265 +259,24 @@ class DatamineCon(object):
            -------
            :returns: pandas.DataFrame
         """
+        importOrReload("datamine.loaders", "Loader")
+        
         if download:
             self.download_data(dataset)
+
         path = os.path.join(self.path, dataset)
-        return Loader.by_name(dataset).load(path, limit=limit)
+        return Loader.by_name(dataset, dataset_args).load(path, limit=limit)
 
-    def crypto_load(self, download=True):
-        """This function loads CME Crypto Data -- Bitcoin and Etherium.  This includes
-        downloading any data avaliable in your catalog into the
-        /cryptocurrency directory of the path variable set upon creating of the
-        connection.  It then loads and structures your local data into
-        into a pandas DataFrame.
-        Data sets avaliable: Bitcoin, Etherium
-        See: https://wiki.chicago.cme.com/confluence/display/EPICSANDBOX/24-7+CME+CF+Cryptocurrency+Indices
+    '''
+    Script consists of "load" and "download" functions.
+    "download" functions only download files into local directory
+    "load" functions download files into local directory, and then read + structure into a pandas DataFrame
+
+    Design pattern for _download family
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~    
         Parameters
         ----------
-        :param download: Attempt to download any data avaliable before loading data from local disk.
-        :type download: bool.
-
-        Creates
-        -------
-        :creates: pandas.DataFrame object.crypto_DF
-
-        Returns
-        -------
-        :returns:  None
-        """
-        self.crypto_DF = self.load_dataset('CRYPTOCURRENCY')
-
-    def MBO_download(self, download=True):
-        """This function downloads CME MBO Data.  This
-        downloads any data avaliable in your catalog into the
-        /MBO directory of the path variable set upon creating of the
-        connection.
-        No attempt is made to load this data into python given
-        the size and unique use case.
-        See: https://wiki.chicago.cme.com/confluence/display/EPICSANDBOX/MBO+FIX?focusedCommentId=525291252#comment-525291252
-        for specifications and other information about this data set.
-
-        Parameters
-        ----------
-        :param download: Attempt to download MBO data set.
-        :type download: bool.
-
-        Returns
-        -------
-        :returns:  None
-
-        """
-        if download:
-            self.download_data('MBO')
-
-
-    def STL_download(self, download=True):
-        """This function downloads CME STL Data.  This
-        downloads any data avaliable in your catalog into the
-        /STL directory of the path variable set upon creating of the
-        connection.
-        No attempt is made to load this data into python given
-        the size and unique use case.
-        See: https://www.cmegroup.com/confluence/display/EPICSANDBOX/STL+INT+Settlements
-        for specifications and other information about this data set.
-
-        Parameters
-        ----------
-        :param download: Attempt to download STL data set.
-        :type download: bool.
-
-        Returns
-        -------
-        :returns:  None
-
-        """
-        if download:
-            self.download_data('STL')
-
-    def tellus_labs_load(self, download=True):
-        """This function loads Tellus Labs Data.
-        https://telluslabs.com/
-
-        This includes downloading any data avaliable in your catalog into the
-        /TELLUSLABS directory of the path variable set upon creating of the
-        connection.  It then loads and structures your local data into
-        into a pandas DataFrame.
-        See: https://www.cmegroup.com/education/articles-and-reports/telluslabs-faq.html
-        Parameters
-        ----------
-        :param download: Attempt to download any data avaliable before loading data from local disk.
-        :type download: bool.
-
-        Creates
-        -------
-        :creates: pandas.DataFrame object.tellus_lab_DF
-
-        Returns
-        -------
-        :returns:  None
-        """
-        self.tellus_labs_DF = self.load_dataset('TELLUSLABS')
-
-    def time_sales_load(self, download=True):
-        """This function loads time and sales data, often refered to as
-         tick data.
-        This includes downloading any data avaliable in your catalog into the
-        /TICK directory of the path variable set upon creating of the
-        connection.  It then loads and structures your local data into
-        into a pandas DataFrame.
-        Parameters
-        ----------
-        :param download: Attempt to download any data avaliable before loading data from local disk.
-        :type download: bool.
-
-        Creates
-        -------
-        :creates: pandas.DataFrame object.time_sales_DF
-
-        Returns
-        -------
-        :returns:  None
-
-        """
-        self.time_sales_DF = self.load_dataset('TICK')
-
-    def orbital_insights_load(self, download=True):
-        """This function loads Orbital Insights Data.
-        https://orbitalinsight.com/
-
-        This includes downloading any data avaliable in your catalog into the
-        /ORBITALINSIGHT directory of the path variable set upon creating of the
-        connection.  It then loads and structures your local data into
-        into a pandas DataFrame.
-        SEE: https://www.cmegroup.com/market-data/orbital-insight/faq.html
-        Parameters
-        ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
-        :type download: bool.
-
-        Creates
-        -------
-        :creates: pandas.DataFrame object.orbital_insights_DF
-
-        Returns
-        -------
-        :returns:  None
-        """
-        self.orbital_insights_DF = self.load_dataset('ORBITALINSIGHT')
-
-    def eris_load(self, download=True):
-        """This function loads Eris Data Sets.
-
-        This includes downloading any data avaliable in your catalog into the
-        /ERIS directory of the path variable set upon creating of the
-        connection.  It then loads and structures your local data into
-        into a pandas DataFrame.
-        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/Eris+PAI+Dataset
-        Parameters
-        ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
-        :type download: bool.
-
-        Creates
-        -------
-        :creates: pandas.DataFrame object.eris_DF
-
-        Returns
-        -------
-        :returns:  None
-        """
-        self.eris_DF = self.load_dataset('ERIS')
-
-
-    def oneqbit_load(self, download=True):
-        """This function loads 	1Qbit Data Sets.
-
-        This includes downloading any data avaliable in your catalog into the
-        /1QBIT directory of the path variable set upon creating of the
-        connection.  It then loads and structures your local data into
-        into a pandas DataFrame.
-        SEE: https://www.cmegroup.com/market-data/faq-1qbit.html
-        Parameters
-        ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
-        :type download: bool.
-
-        Creates
-        -------
-        :creates: pandas.DataFrame object.oneqbit_DF
-
-        Returns
-        -------
-        :returns:  DF
-        """
-        self.oneqbit_DF = self.load_dataset('1QBIT')
-
-
-
-
-    def bantix_downloads(self, download=True):
-        """This function downloads bantix Data Sets.
-
-        This includes downloading any data avaliable in your catalog into the
-        /BANTIX directory of the path variable set upon creating of the
-        connection.  Given the various formats; not attempt to load into Pandas is made.
-        SEE: https://www.cmegroup.com/market-data/quikstrike-via-bantix-technologies.html
-        Parameters
-        ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
-        :type download: bool.
-
-        Creates
-        -------
-        :creates: pandas.DataFrame object.bantix_DF
-
-        Returns
-        -------
-        :returns:  None
-        """
-        if download:
-            self.download_data('BANTIX')
-
-    def rsmetrics_load(self, download=True):
-        """This function loads RS Metrics metals Data Sets.
-
-            This includes downloading any data avaliable in your catalog into the
-            /RSMETRICS directory of the path variable set upon creating of the
-            connection.  It then loads and structures your local data into
-            into a pandas DataFrame.
-            SEE: https://www.cmegroup.com/market-data/rs-metrics/faq-rs-metrics.html
-            Parameters
-            ----------
-            :param download: Attempt to download any
-            data avaliable before loading data from local disk.
-            :type download: bool.
-
-            Creates
-            -------
-            :creates: pandas.DataFrame object.rsmetrics_DF
-
-            Returns
-            -------
-            :returns:  None
-            """
-        self.rsmetrics_DF = self.load_dataset('RSMETRICS')
-
-    def brokertech_tob_download(self, download=True):
-        """This function downloads Nex BrokerTech Top of Book Data Sets.
-
-        This includes downloading any data avaliable in your catalog into the
-        /NEXBROKERTECTOB, directory of the path variable
-        set upon creating of the connection.
-        Given the various formats; not attempt to load into Pandas is made.
-        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
-        Parameters
-        ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
+        :param download: Attempt to download any data available before loading data from local disk.
         :type download: bool.
 
         Creates
@@ -513,56 +286,320 @@ class DatamineCon(object):
         Returns
         -------
         :returns:  None
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Design pattern for _load family
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~    
+        Parameters
+        ----------
+        :param download: Attempt to download any data avaliable before loading data from local disk.
+        :type download: bool.
+
+        Creates
+        -------
+        :creates: pandas.DataFrame object.datasetname_DF
+
+        Returns
+        -------
+        :returns:  None
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    '''
+
+    def block_load(self, download=True):
+        """
+        Data Set - Block Trades
+        File Path - /BLOCK
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Block+Trades
+        """
+        self.block_DF = self.load_dataset('BLOCK')
+        
+
+    def brokertech_tob_download(self, download=True):
+        """
+        Data Set - Nex BrokerTech Top of Book Data Sets
+        File Path - /NEXBROKERTECTOB
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
         """
         if download:
             self.download_data('NEXBROKERTECTOB')
 
     def brokertech_dob_download(self, download=True):
-        """This function downloads Nex BrokerTech Depth of Book Data Sets.
-
-        This includes downloading any data avaliable in your catalog into the
-        '/NEXBROKERTECDOB' directory of the path variable
-        set upon creating of the connection.
-        Given the various formats; not attempt to load into Pandas is made.
-        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
-        Parameters
-        ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
-        :type download: bool.
-
-        Creates
-        -------
-        :creates: None
-
-        Returns
-        -------
-        :returns:  None
+        """
+        Data Set - Nex BrokerTech Depth of Book Data Sets
+        File Path - /NEXBROKERTECDOB
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
         """
         if download:
             self.download_data('NEXBROKERTECDOB')
 
     def brokertech_fob_download(self, download=True):
-        """This function downloads Nex BrokerTech Full Book Data Sets.
-
-        This includes downloading any data avaliable in your catalog into the
-        'NEXBROKERTECFOB' directory of the path variable
-        set upon creating of the connection.
-        Given the various formats; not attempt to load into Pandas is made.
-        SEE: https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
-        Parameters
-        ----------
-        :param download: Attempt to download any
-        data avaliable before loading data from local disk.
-        :type download: bool.
-
-        Creates
-        -------
-        :creates: None
-
-        Returns
-        -------
-        :returns:  None
+        """
+        Data Set - Nex BrokerTech Full Book Data Sets
+        File Path - /NEXBROKERTECFOB
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
         """
         if download:
             self.download_data('NEXBROKERTECFOB')
+        
+    def crypto_load(self, download=True):
+        """
+        Data Set - Crypto Data, Bitcoin & Etherium
+        File Path - /cryptocurrency
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Liquidity+Tool+Dataset
+        """
+        self.crypto_DF = self.load_dataset('CRYPTOCURRENCY')
+    
+    def eod_load(self, download=True):
+        """
+        Data Set - End of Day Complete
+        File Path - /EOD
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/End+of+Day
+        """
+        self.eod_DF = self.load_dataset('EOD', download=download)
+
+    def voi_load(self, download=True):
+        """
+        Data Set - Volume and Open Interest
+        File Path - /VOI
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Volume+and+Open+Interest
+        """
+        self.voi_DF = self.load_dataset('VOI', download=download)
+
+    def eris_load(self, download=True):
+        """
+        Data Set - Eris PAI
+        File Path - /ERIS
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Eris+PAI+Dataset
+        """
+        self.eris_DF = self.load_dataset('ERIS')
+
+    def fx_load(self, download=True):
+        """
+        Data Set - FX Premium
+        File Path - /FX
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Premium+FX+Feed+Historical+Data
+        Warning -- Files are large when uncompressed
+        """
+        self.fx_DF = self.load_dataset('FX', download=download)
+        
+#    def govpx_load(self, download=True, dataset_args = {}):
+#        """
+#        Data Set - GovPX
+#        File Path - /GOVPX
+#        Function Type - Download & Load
+#        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/GovPX+Historical+Data#
+#        """
+#        self.govpx_DF = self.load_dataset(dataset = 'GOVPX', dataset_args = dataset_args, download=download)
+
+    def govpx_download(self, download=True):
+        """
+        Data Set - GovPX
+        File Path - /GOVPX
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/GovPX+Historical+Data
+        """
+        if download:
+            self.download_data('GOVPX')
+
+    def govpxeod_download(self, download=True):
+        """
+        Data Set - GovPX End of Day
+        File Path - /GOVPXEOD
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/GovPX+End+of+Day+Historical+Data
+        """
+        if download:
+            self.download_data('GOVPXEOD')
+            
+    def STL_download(self, download=True):
+        """
+        Data Set - STL INT Settlements
+        File Path - /STL
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/STL+INT+Settlements
+        """
+        if download:
+            self.download_data('STL')
+
+    def liqtool_load(self, download=True):
+        """
+        Data Set - Liquidity Tool
+        File Path - /LIQTOOL
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Liquidity+Tool+Dataset
+        """
+        self.liqtool_DF = self.load_dataset('LIQTOOL')        
+
+    def MD_download(self, download=True):
+        """
+        Data Set - Market Depth FIX
+        File Path - /MD
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Market+Depth
+        """
+        if download:
+            self.download_data('MD')
+            
+    def RLC_download(self, download=True):
+        """
+        Data Set - Market Depth RLC
+        File Path - /RLC
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Market+Depth
+        """
+        if download:
+            self.download_data('RLC')
+            
+    def RLCSECDEF_download(self, download=True):
+        """
+        Data Set - SECDEF RLC
+        File Path - /RLCSECDEF
+        Function Type - Download Only
+        Help URL - 
+        """
+        if download:
+            self.download_data('RLCSECDEF')
+
+    def MBO_download(self, download=True):
+        """
+        Data Set - MBO FIX
+        File Path - /MBO
+        Function Type - Download Only
+        Help URL - https://wiki.chicago.cme.com/confluence/display/EPICSANDBOX/MBO+FIX
+        """
+        if download:
+            self.download_data('MBO')
+
+    def PCAP_download(self, download=True):
+        """
+        Data Set - Packet Capture (PCAP)
+        File Path - /PCAP
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Packet+Capture+Dataset
+        """
+        if download:
+            self.download_data('PCAP')
+
+    def sofrois_load(self, download=True):
+        """
+        Data Set - SOFR OIS Index
+        File Path - /SOFR
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/market-data/faq-sofr-third-party-data.html
+        """
+        self.sofrois_DF = self.load_dataset('SOFR', download=download)
+
+    def sofrstriprates_load(self, orient='long', download=True):
+        """
+        Data Set - SOFR Strip Rates
+        File Path - /SOFRSR
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/SOFR+Strip+Rates
+        """
+        if orient == 'wide':
+            
+            self.sofrstriprates_DF = self.load_dataset('SOFRSR', 
+                                                download=download).pivot(index='businessDate', 
+                                                        columns='Description', values='rate').sort_values('businessDate', ascending=False).reset_index()
+
+            self.sofrstriprates_DF['businessDate'] = self.sofrstriprates_DF['businessDate'].dt.date                                          
+            self.sofrstriprates_DF.set_index('businessDate', inplace=True)
+        elif orient == 'long':
+            self.sofrstriprates_DF = self.load_dataset('SOFRSR', download=download)
+        else:
+            print("Incorrect orientation parameter. Defaulting to long.")
+            self.sofrstriprates_DF = self.load_dataset('SOFRSR', download=download)
+
+    def SECDEF_download(self, download=True):
+        """
+        Data Set - Securities Definition (SECDEF)
+        File Path - /SECDEF
+        Function Type - Download Only
+        Help URL - Not Applicable
+        """
+        if download:
+            self.download_data('SECDEF')
+
+    def time_sales_load(self, download=True):
+        """
+        Data Set - Time and Sales (TICK)
+        File Path - /TICK
+        Function Type - Download & Load
+        Help URL - 
+        """
+        self.time_sales_DF = self.load_dataset('TICK')
+
+    def BBO_download(self, download=True):
+        """
+        Data Set - Top-of-Book (BBO)
+        File Path - /BBO
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Top+of+Book+-+BBO
+        """
+        if download:
+            self.download_data('BBO')
+
+    def bantix_download(self, download=True):
+        """
+        Data Set - bantix
+        File Path - /BANTIX
+        Function Type - Download Only
+        Help URL - https://www.cmegroup.com/market-data/quikstrike-via-bantix-technologies.html
+        """
+        if download:
+            self.download_data('BANTIX')
+
+    def JSE_download(self, download=True):
+        """
+        Data Set - Johannesburg Stock Exchange
+        File Path - /JSE
+        Function Type - Download Only
+        Help URL - 
+        """
+        if download:
+            self.download_data('JSE')
+
+    def orbital_insights_load(self, download=True):
+        """
+        Data Set - Orbital Insights (https://orbitalinsight.com/)
+        File Path - /ORBITALINSIGHT
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/market-data/orbital-insight/faq.html
+        """
+        self.orbital_insights_DF = self.load_dataset('ORBITALINSIGHT')
+
+    def rsmetrics_load(self, download=True):
+        """
+        Data Set - RS Metrics
+        File Path - /RSMETRICS
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/market-data/rs-metrics/faq-rs-metrics.html
+        """
+        self.rsmetrics_DF = self.load_dataset('RSMETRICS')
+
+    def tellus_labs_load(self, download=True):
+        """
+        Data Set - Tellus Labs (https://telluslabs.com)
+        File Path - /TELLUSLABS
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/education/articles-and-reports/telluslabs-faq.html
+        """
+        self.tellus_labs_DF = self.load_dataset('TELLUSLABS')
+
+    def oneqbit_load(self, download=True):
+        """
+        Data Set - 1Qbit
+        File Path - /1QBIT
+        Function Type - Download & Load
+        Help URL - https://www.cmegroup.com/market-data/faq-1qbit.html
+        """
+        self.oneqbit_DF = self.load_dataset('1QBIT')

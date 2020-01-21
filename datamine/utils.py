@@ -5,7 +5,6 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 
 MAX_WORKERS = 4
 
-
 logger = logging.getLogger(__name__.rsplit('.', 1)[0])
 
 # If we're in a Jupyter notebook, we need to play some tricks
@@ -18,7 +17,6 @@ try:
         logger.setLevel(logging.INFO)
 except Exception:
     pass
-
 
 def tqdm_execute_tasks(fn, keys, desc, max_workers=MAX_WORKERS, mode='process'):
     """

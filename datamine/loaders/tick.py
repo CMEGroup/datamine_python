@@ -2,7 +2,6 @@ from . import Loader
 
 import pandas as pd
 
-
 class TickLoader(Loader):
     dataset = 'TICK'
     fileglob = '*.gz'
@@ -32,6 +31,5 @@ class TickLoader(Loader):
         # Should we drop trade_date and trade_time? If so they need to
         # be removed from the columns and dtype entries too
         return df
-
 
 tickLoader = TickLoader()
