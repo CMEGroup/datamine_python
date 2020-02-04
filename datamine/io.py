@@ -19,6 +19,7 @@ import logging
 logging.basicConfig(filename='datamine.log', filemode='w', format='%(levelname)s - %(asctime)s - %(message)s', level=logging.ERROR)
 
 from .utils import tqdm_execute_tasks, MAX_WORKERS, logger
+from .loaders import Loader
 
 DEFAULT_URL = 'https://datamine.cmegroup.com/cme/api/v1'
 NO_LIMIT = sys.maxsize
@@ -259,7 +260,6 @@ class DatamineCon(object):
            -------
            :returns: pandas.DataFrame
         """
-        importOrReload("datamine.loaders", "Loader")
         
         if download:
             self.download_data(dataset)
