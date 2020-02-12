@@ -19,17 +19,18 @@ class TickLoader(Loader):
                            'close_open_type', 'exchange_code', 'ask_bid_type', 'indicative_quote_type',
                            'valid_open_exception', 'post_close', 'cancel_code_type',
                            'insert_code_type', 'fast_late_indicator', 'cabinet_indicator', 'book_indicator'),
-              'int64': ('trade_sequence_number', 'contract_delivery_date', 'trade_quantity', 'entry_date'),
+              'int64': ('trade_sequence_number', 'contract_delivery_date', 'trade_quantity'),
               'float': ('strike_price', 'trade_price'),
-              'date:%H:%M:%s': ('trade_time',),
-              'date': ('trade_date_time', 'trade_date')}
+              'date:%H:%M:%s': ('trade_time'),
+              'date:%Y%m%d': ('trade_date', 'entry_date'),
+              'date': ('trade_date_time')}
 
     def _load(self, file):
         df = pd.read_csv(file, header=None, low_memory=False)
+        
         # Make trade_date_time the first column
         df.insert(0, -1, df[0].astype(str) + 'T' + df[1].astype(str))
-        # Should we drop trade_date and trade_time? If so they need to
-        # be removed from the columns and dtype entries too
-        return df
+        
+        return(df)
 
 tickLoader = TickLoader()
