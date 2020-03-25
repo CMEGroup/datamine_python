@@ -36,7 +36,7 @@ deploy:
     branch: master
     tags: true
   script:
-  - anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup $HOME/miniconda/conda-bld/*/*.tar.bz2
+  - anaconda --verbose --token $ANACONDA_TOKEN upload --user CME_Group $HOME/miniconda/conda-bld/*/*.tar.bz2
     --force
 - provider: script
   skip_cleanup: true
@@ -44,5 +44,5 @@ deploy:
     branch: master
     tags: false
   script:
-  - anaconda --verbose --token $ANACONDA_TOKEN upload --user cmegroup --label
+  - anaconda --verbose --token $ANACONDA_TOKEN upload --user CME_Group --label
     dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
