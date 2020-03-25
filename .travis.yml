@@ -7,9 +7,6 @@ branches:
   - "/^\\d+\\.\\d+.*$/"
 
 env:
-  global:
-    secure: 6OguhbEZAccL4aREL4jeJWWQFInxybfEA8XujenYRasOedySIPmlml+OB9lSnQ8d7w40dAISgdB67kALUh1DkOLhA0omZ5o8Ij3Mu633iYIGHfDK6JVl8o715fSsMA9vBS54+yo5rn5jfPXaQNNwZyoGqg3BkzsjXUDdBvHBCMRnu5ysw8aOxESTaVtRbRSeA47hDzXub0dd0/2vgsr8hur86biTcCW1AZPGCN/kF55W8GDgg81UIuKlRlaCyBoUiM6fgMlD3AkeLyvERit3HtvXsoRkBZCoVG2aqEjPofenaGii2RHIsWOhscVMlK9iuPgocFvBT8YCwhmIxyN1sTcb5ASnZGUzYUJmZ0qnKHQgv87TprNfu/dfKIjbHxqbiajuUMp8XM5zGD7W5ge8UWh6FjHw63+4FzBfDAiLVUh3zUUmQUO/V9z2Cr698ARz/z7BpPZxGZutFmrn/9rwqNvz4FK/VTx2M8NtSn/sGG+SvgKTXiy5DmFyAzDxixs1XOrf0fBKPivbm8qTI/og+s+d284gA0ibBIzQIbo5XkPySZqfe5vvmTYo0m+UGI4ff5GYczLXJRk2ebIsR6O5PqFX/E2BjOmEc2QXbl+DxBuMddg+XEMjskcneYfwtgvn80EJnXZb73cywmLs26EIjJsuDBrdvUx473XXnW0LsSI=
-
 os:
 - linux
 
