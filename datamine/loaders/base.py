@@ -60,7 +60,7 @@ class Loader(object):
             return
         
         column_check = []
-        for k, v in self.dtypes.items():
+        for k,v in self.dtypes.items():
             for value in v:
                 column_check.append(value)
         if self.columns is not None:

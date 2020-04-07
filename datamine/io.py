@@ -87,7 +87,8 @@ class DatamineCon(object):
         self.session.mount('', adapter)
 
         self.path = path
-        self.data_catalog = {}
+        self.catalog = {}
+        self.filtered = False
         self._dataset = None
         self._limit = -1
         self.threads = threads
@@ -105,9 +106,9 @@ class DatamineCon(object):
            :param fid: The FID of the file to be retrieved.
         """
 
-        if fid not in self.data_catalog:
+        if fid not in self.catalog:
             raise RequestError('FID not found in the catalog: {}'.format(fid))
-        record = self.data_catalog[fid]
+        record = self.catalog[fid]
         supplied_url, params = _url_params(record['url'])
         assert supplied_url == self.url + '/download'
         response = self._call_api('download', params, stream=True)
@@ -152,7 +153,7 @@ class DatamineCon(object):
                         If None, the entire catalog is downloaded.
         """
 
-        fids = [fid for fid, record in self.data_catalog.items()
+        fids = [fid for fid, record in self.catalog.items()
                 if dataset is None or record['dataset'] == dataset]
         description = 'downloading {} data'.format(dataset if dataset else 'all datasets')
         tqdm_execute_tasks(self.download_file, fids, description, self.threads, mode='thread')
@@ -176,7 +177,7 @@ class DatamineCon(object):
 
         Creates
         -------
-        :creates: python.dictionary self.data_catalog -- containing custom data catalog available.
+        :creates: python.dictionary self.catalog -- containing custom data catalog available.
 
         Returns
         -------
@@ -198,7 +199,7 @@ class DatamineCon(object):
             if self._limit >= 0:
                 reason = 'by request' if refresh else 'for new parameters'
                 logger.debug('get_catalog: refreshing {}'.format(reason))
-            self.data_catalog = {}
+            self.catalog = {}
             self._dataset = None
             self._limit = 0
             is_valid = False
@@ -209,7 +210,7 @@ class DatamineCon(object):
 
         params = {}
         duplicates = 0
-        nrecs = len(self.data_catalog)
+        nrecs = len(self.catalog)
         if dataset:
             params['dataset'] = dataset
         while True:
@@ -232,8 +233,8 @@ class DatamineCon(object):
             except (ValueError, TypeError):
                 raise RequestError('Invalid JSON data:\n   URL: {}\n  Text: {}\n'.format(resp.url, resp.text))
 
-            self.data_catalog.update((item['fid'], item) for item in files)
-            orecs, nrecs = nrecs, len(self.data_catalog)
+            self.catalog.update((item['fid'], item) for item in files)
+            orecs, nrecs = nrecs, len(self.catalog)
             duplicates += orecs + len(files) - nrecs
 
             if not next_url:
@@ -243,7 +244,7 @@ class DatamineCon(object):
             _, params = _url_params(next_url)
 
         logger.info('get_catalog: {} records downloaded, {} duplicates, {} saved'.format(nrecs + duplicates, duplicates, nrecs))
-        self._limit = max(limit, len(self.data_catalog))
+        self._limit = max(limit, len(self.catalog))
         self._dataset = dataset
 
     def load_dataset(self, dataset, download=True, limit=None, dataset_args = {}):
@@ -315,9 +316,9 @@ class DatamineCon(object):
         self.block_DF = self.load_dataset('BLOCK')
         
 
-    def brokertech_tob_download(self, download=True):
+    def brokertec_tob_download(self, download=True):
         """
-        Data Set - Nex BrokerTech Top of Book Data Sets
+        Data Set - Nex BrokerTec Top of Book Data Sets
         File Path - /NEXBROKERTECTOB
         Function Type - Download Only
         Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
@@ -325,9 +326,9 @@ class DatamineCon(object):
         if download:
             self.download_data('NEXBROKERTECTOB')
 
-    def brokertech_dob_download(self, download=True):
+    def brokertec_dob_download(self, download=True):
         """
-        Data Set - Nex BrokerTech Depth of Book Data Sets
+        Data Set - Nex BrokerTec Depth of Book Data Sets
         File Path - /NEXBROKERTECDOB
         Function Type - Download Only
         Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
@@ -335,9 +336,9 @@ class DatamineCon(object):
         if download:
             self.download_data('NEXBROKERTECDOB')
 
-    def brokertech_fob_download(self, download=True):
+    def brokertec_fob_download(self, download=True):
         """
-        Data Set - Nex BrokerTech Full Book Data Sets
+        Data Set - Nex BrokerTec Full Book Data Sets
         File Path - /NEXBROKERTECFOB
         Function Type - Download Only
         Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/NEX+-+BrokerTec+Historical+Data
@@ -391,6 +392,15 @@ class DatamineCon(object):
         """
         self.fx_DF = self.load_dataset('FX', download=download)
         
+    def repopx_load(self, download=True):
+       """
+       Data Set - RepoPX
+       File Path - /REPOPX
+       Function Type - Download & Load
+       Help URL - 
+       """
+       self.repopx_DF = self.load_dataset(dataset = 'REPOPX', download=download)
+
 #    def govpx_load(self, download=True, dataset_args = {}):
 #        """
 #        Data Set - GovPX
@@ -437,7 +447,7 @@ class DatamineCon(object):
         Function Type - Download & Load
         Help URL - https://www.cmegroup.com/confluence/display/EPICSANDBOX/Liquidity+Tool+Dataset
         """
-        self.liqtool_DF = self.load_dataset('LIQTOOL')        
+        self.liqtool_DF = self.load_dataset('LIQTOOL', download = download)        
 
     def MD_download(self, download=True):
         """

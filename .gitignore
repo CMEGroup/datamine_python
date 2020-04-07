@@ -73,3 +73,7 @@ datamine.log
 
 # Spyder Project Files
 .spyproject
+
+# Test scripts
+datamine-tester.py
+datamine-tester.ipynb
