@@ -1,4 +1,3 @@
-import versioneer
 from setuptools import setup, find_packages
 
 with open('README.md') as fp:
@@ -6,9 +5,8 @@ with open('README.md') as fp:
 
 setup(
     name="datamine",
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
-    description="CME Group Datamine Package.",
+    version='0.5,
+    description="CME Group DataMine Python Package",
     url="https://github.com/CMEGroup/datamine_python",
     author="Aaron Walters",
     author_email="aaron.walters@cmegroup.com",
