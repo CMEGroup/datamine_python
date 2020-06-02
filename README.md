@@ -1,6 +1,6 @@
 # CME Datamine | [![Build Status](https://travis-ci.org/CMEGroup/datamine_python.svg?branch=master)](https://travis-ci.org/CMEGroup/datamine_python)
 
-[Overview](#overview) | [Installation](#installation) | [Getting Started](#gettingstarted)
+[Overview](#overview-) | [Installation](#installation-) | [Getting Started](#gettingstarted-)
 
 ## Overview <a link = 'overview'></a>
 
