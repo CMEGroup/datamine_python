@@ -42,7 +42,7 @@ deploy:
     tags: false
   script:
   - anaconda --verbose --token $ANACONDA_TOKEN upload --user CME_Group --label
-    dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
+    main $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
 - provider: pypi
   skip_cleanup: true
   on:
