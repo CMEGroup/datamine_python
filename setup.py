@@ -5,11 +5,11 @@ with open('README.md') as fp:
 
 setup(
     name="datamine",
-    version="0.5",
+    version="0.2",
     description="CME Group DataMine Python Package",
     url="https://github.com/CMEGroup/datamine_python",
-    author="Aaron Walters",
-    author_email="aaron.walters@cmegroup.com",
+    author="Aaron Walters; Hamza Amjad",
+    author_email="aaron.walters@cmegroup.com; hamza.amjad@cmegroup.com",
     license="BSD 3-Clause",
     install_requires=['requests', 'urllib3', 'pandas', 'tqdm', 'futures'],
     packages=find_packages(exclude=['tests']),
