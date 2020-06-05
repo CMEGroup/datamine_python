@@ -36,4 +36,4 @@ about:
   home: https://github.com/CMEGroup/datamine_python
   license: BSD 3-Clause
   license_file: LICENSE
-  summary: 'Python connector for the CME Datamine service.'
+  summary: 'Python connector for the CME DataMine service.'
