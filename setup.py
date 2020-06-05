@@ -11,7 +11,7 @@ setup(
     author="Aaron Walters",
     author_email="aaron.walters@cmegroup.com",
     maintainer="Hamza Amjad",
-    maintainer_email="hamza.amjad@cmegroup.com"
+    maintainer_email="hamza.amjad@cmegroup.com",
     license="BSD 3-Clause",
     install_requires=['requests', 'urllib3', 'pandas', 'tqdm', 'futures'],
     packages=find_packages(exclude=['tests']),
