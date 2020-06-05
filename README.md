@@ -28,7 +28,7 @@ The source code is currently hosted on GitHub at: https://github.com/CMEGroup/da
 Users can install in an Python environment created with [Anaconda](https://www.anaconda.com/distribution/), or its minimalist alternative [Miniconda](https://docs.conda.io/en/latest/miniconda.html) by running:
 
 ```buildoutcfg
-conda install -c cmegroup datamine
+conda install -c cme_group datamine
 ```
 
 ### PyPi
