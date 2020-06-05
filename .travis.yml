@@ -43,9 +43,7 @@ deploy:
   script:
   - anaconda --verbose --token $ANACONDA_TOKEN upload --user CME_Group --label
     dev $HOME/miniconda/conda-bld/*/*.tar.bz2 --force
-
-deploy:
-  provider: pypi
+- provider: pypi
   skip_cleanup: true
   on:
     branch: master
