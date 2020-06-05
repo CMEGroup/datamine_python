@@ -6,7 +6,7 @@ with open('README.md') as fp:
 
 setup(
     name="datamine",
-    version='0.5,
+    version="0.5",
     description="CME Group DataMine Python Package",
     url="https://github.com/CMEGroup/datamine_python",
     author="Aaron Walters",
