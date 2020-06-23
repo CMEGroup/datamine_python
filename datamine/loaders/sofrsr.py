@@ -6,24 +6,24 @@ import json
 
 class SOFRStripRatesLoader(Loader):
     dataset = 'SOFRSR'
-    fileglob = 'SOFR-Term-Rate-Fixings_*.JSON'
+    fileglob = 'SOFRSR_TermRate_Fixings_*.JSON'
 
-    columns = ['rate','transactionTime','businessDate','productCode', 'securityId','Description']
+    columns = ['rate','transactionTime','businessDate','productCode','securityId','productDescription']
 
-    dtypes = {'category': ('productCode', 'productDescription', 'securityId',
-                           ),
-              'int64': (),
-              'float': ('rate', 'netPctChg'),
-              'date:%m-%d-%Y': ('businessDate',),
-              'date': ('transactionTime')}
+    dtypes = {
+        'category': ('productCode', 'productDescription', 'securityId',),
+        'float': ('rate',),
+        'date:%m-%d-%Y' : ('businessDate'),
+        'date:%m-%d-%Y:%H:%M:%S' : ('transactionTime')
+             }
 
     def _load(self, filename):
         result = []
         with open(filename, 'rt', encoding='utf-8') as f:
             for line in f:
                 line = json.loads(line)
-            result = pd.io.json.json_normalize(line['payload'])
-        
+            result = pd.json_normalize(line['payload'])
+            
         return result
 
 SOFRstripratesLoader = SOFRStripRatesLoader()
