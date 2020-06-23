@@ -1,4 +1,5 @@
 from . import Loader
+import pandas as pd
 
 class OneQBitLoader(Loader):
     dataset = '1QBIT'
@@ -125,8 +126,11 @@ class OneQBitLoader(Loader):
                'MIX_BIN_POS_140', 'MIX_BIN_POS_141', 'MIX_BIN_POS_142', 'MIX_BIN_POS_143', 'MIX_BIN_POS_144', 'MIX_BIN_POS_145', 
                'MIX_BIN_POS_146', 'MIX_BIN_POS_147', 'MIX_BIN_POS_148', 'MIX_BIN_POS_149', 'MIX_BIN_POS_150', 'MIX_BIN_POS_151', 
                'MIX_BIN_POS_152', 'MIX_BIN_POS_153', 'MIX_BIN_POS_154', 'MIX_BIN_POS_155'),
+              'date': ('DATE_LABEL'),
+             'date:%Y%m%d': ('TRADEDATE')}
 
-              'date': ('TRADEDATE', 'DATE_LABEL')}
-
+    def _load(self, file):
+        df = pd.read_csv(file, skiprows = [1,2], low_memory=False)
+        return df
 
 oneqbitloader = OneQBitLoader()
